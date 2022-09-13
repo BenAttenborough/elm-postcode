@@ -1,5 +1,15 @@
 # Postcode app
 
+## Running the app
+
+Run `elm reactor`, then navigate to the `src` folder and select `Main.elm`
+
+To compile run:
+
+`elm make src/Main.elm --optimize --output=elm.js`
+
+## Instructions
+
 Please write a web application in a javascript framework (AngularJS preferred, but any is fine) or Elm that
 allows a user to query and show details for a given UK postcode.
 

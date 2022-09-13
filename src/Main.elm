@@ -1,40 +1,37 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, button, div, text)
+import Html exposing (Html, button, input, div, text)
 import Html.Events exposing (onClick)
+import Html.Attributes exposing (placeholder, value)
+import Html.Events exposing (onInput)
 
 
 type alias Model =
-    { count : Int }
+    { postCode : String }
 
 
 initialModel : Model
 initialModel =
-    { count = 0 }
+    { postCode = "" }
 
 
 type Msg
-    = Increment
-    | Decrement
+    = Submit String
 
 
 update : Msg -> Model -> Model
 update msg model =
     case msg of
-        Increment ->
-            { model | count = model.count + 1 }
-
-        Decrement ->
-            { model | count = model.count - 1 }
+        Submit code ->
+            { model | postCode = code }
 
 
 view : Model -> Html Msg
 view model =
     div []
-        [ button [ onClick Increment ] [ text "+1" ]
-        , div [] [ text <| String.fromInt model.count ]
-        , button [ onClick Decrement ] [ text "-1" ]
+        [ input [ placeholder "Postcode", value model.postCode, onInput Submit ] []
+        , div [] [text model.postCode]
         ]
 
 
@@ -45,3 +42,4 @@ main =
         , view = view
         , update = update
         }
+ 
