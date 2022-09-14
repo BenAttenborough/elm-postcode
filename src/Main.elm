@@ -6,17 +6,22 @@ import Html.Events exposing (onClick)
 import Html.Attributes exposing (placeholder, value)
 import Html.Events exposing (onInput)
 import Http
-import Json.Decode exposing (Decoder, map4, field, int, string)
+import Json.Decode exposing (Decoder, field, int)
+
+postcodeApiUrl : String
+postcodeApiUrl = "https://api.postcodes.io/postcodes/CO94LN"
 
 type alias Model =
     { postCode : String
-    , isLoading : Bool }
+    , isLoading : Bool 
+    , data : Maybe String }
 
 
 initialModel : () -> (Model, Cmd Msg)
 initialModel _ =
     ({ postCode = "" 
-    , isLoading = True
+    , isLoading = False
+    , data = Nothing
     },
     Cmd.none)
 
@@ -24,12 +29,16 @@ subscriptions : Model -> Sub Msg
 subscriptions _ =
   Sub.none
 
+statusDecoder : Decoder Int
+statusDecoder = 
+    (field "status" int)
+
 
 type Msg
     = OnChange String
     | Submit
     | Loading
-    -- | GotPostcode (Result Http.Error Response)
+    | GotPostcode (Result Http.Error String)
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -39,16 +48,22 @@ update msg model =
             ({ model | postCode = code }, Cmd.none)
         
         Submit ->
-            (model, Cmd.none)
+            ({ model | isLoading = True}, getPostcode)
         
         Loading ->
             (model, Cmd.none)
 
-        -- GotPostcode ->
-        --     (model, Cmd.none)
+        GotPostcode result ->
+            case result of
+                Ok code ->
+                    ({ model | isLoading = False, data = Just code}, Cmd.none)
+
+                Err _ ->
+                    ({ model | isLoading = False, data = Nothing}, Cmd.none)
+
 
 view : Model -> Html Msg
-view ({postCode, isLoading})  =
+view ({postCode, isLoading, data})  =
     div []
         [ input [ placeholder "Postcode", value postCode, onInput OnChange ] []
         , button [ onClick Submit ] [ text "Submit" ]
@@ -71,3 +86,10 @@ main =
         , update = update
         }
  
+getPostcode : Cmd Msg
+getPostcode =
+    Http.get
+        {
+            url = postcodeApiUrl
+            , expect = Http.expectString GotPostcode
+        }
