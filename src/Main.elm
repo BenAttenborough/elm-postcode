@@ -4,7 +4,7 @@ import Browser
 import Html exposing (Html, button, input, div, text)
 import Html.Events exposing (onClick)
 import Html.Attributes exposing (placeholder, value)
-import Html.Events exposing (onInput)
+import Html.Events exposing (onInput, on, keyCode)
 import Http
 import Json.Decode as Decode exposing (Decoder, string)
 import Json.Decode.Pipeline exposing (required)
@@ -46,6 +46,7 @@ responseDecoder =
 
 type Msg
     = OnChange String
+    | OnKeyDown Int
     | Submit String
     | Loading
     | GotPostcode (Result Http.Error Response)
@@ -70,7 +71,13 @@ update msg model =
         
         Submit code ->
             ({ model | isLoading = True}, (getPostcode code))
-        
+
+        OnKeyDown key ->
+            if key == 13 then
+                ({ model | isLoading = True}, (getPostcode model.postCode))
+            else
+                (model, Cmd.none)
+
         Loading ->
             (model, Cmd.none)
 
@@ -82,13 +89,15 @@ update msg model =
                 Err _ ->
                     ({ model | isLoading = False, details = Nothing}, Cmd.none)
 
+onKeyDown : (Int -> msg) -> Html.Attribute msg
+onKeyDown tagger =
+    on "keydown" (Decode.map tagger keyCode)
 
 view : Model -> Html Msg
 view ({postCode, isLoading, details})  =
     div []
-        [ input [ placeholder "Postcode", value postCode, onInput OnChange ] []
+        [ input [ placeholder "Postcode", value postCode, onInput OnChange, onKeyDown OnKeyDown ] []
         , button [ onClick (Submit postCode) ] [ text "Submit" ]
-        , div [] [text postCode]
         , div [] [
             if isLoading == True then
                 text "Loading data"
