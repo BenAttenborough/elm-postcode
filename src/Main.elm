@@ -99,7 +99,7 @@ view ({postCode, isLoading, details})  =
         [ input [ placeholder "Postcode", value postCode, onInput OnChange, onKeyDown OnKeyDown ] []
         , button [ onClick (Submit postCode) ] [ text "Submit" ]
         , div [] [
-            if isLoading == True then
+            if isLoading then
                 text "Loading data"
             else
                 text "Waiting for input"
