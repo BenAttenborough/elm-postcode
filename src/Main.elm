@@ -6,7 +6,7 @@ import Html.Attributes exposing (placeholder, value)
 import Html.Events exposing (keyCode, on, onClick, onInput)
 import Http
 import Json.Decode as Decode exposing (Decoder, string)
-import Json.Decode.Pipeline exposing (required)
+import Json.Decode.Pipeline exposing (required, requiredAt)
 import RemoteData
 
 
@@ -17,9 +17,18 @@ postcodeApiUrl =
 
 type alias Model =
     { postCode : String
-    , data : RemoteData.WebData Response
+    , data : RemoteData.WebData PostcodeDetails
     }
 
+type alias PostcodeDetails =
+    { country : String
+    , region : String
+    }
+
+
+-- type alias Response =
+--     { result : PostcodeDetails
+--     }
 
 initialModel : () -> ( Model, Cmd Msg )
 initialModel _ =
@@ -38,34 +47,24 @@ subscriptions _ =
 postcodeDecoder : Decoder PostcodeDetails
 postcodeDecoder =
     Decode.succeed PostcodeDetails
-        |> required "country" string
-        |> required "region" string
+        |> requiredAt ["result", "country"] string
+        |> requiredAt ["result", "region"] string
 
 
-responseDecoder : Decoder Response
-responseDecoder =
-    Decode.succeed Response
-        |> required "status" Decode.int
-        |> required "result" postcodeDecoder
+-- responseDecoder : Decoder Response
+-- responseDecoder =
+--     Decode.succeed Response
+--         |> required "result" postcodeDecoder
 
 
 type Msg
     = OnChange String
     | OnKeyDown Int
     | Submit String
-    | GotPostcode (RemoteData.WebData Response)
+    | GotPostcode (RemoteData.WebData PostcodeDetails)
 
 
-type alias PostcodeDetails =
-    { country : String
-    , region : String
-    }
 
-
-type alias Response =
-    { status : Int
-    , result : PostcodeDetails
-    }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -104,18 +103,18 @@ view { postCode, data } =
             []
         , case data of
             RemoteData.NotAsked ->
-                text "Initialising."
+                text "Waiting for input"
 
             RemoteData.Loading ->
-                text "Loading."
+                text "Loading"
 
             RemoteData.Failure err ->
                 text ("Error: " ++ errorToString err)
 
             RemoteData.Success response ->
                 div []
-                    [ text response.result.country
-                    , text response.result.region
+                    [ text response.country
+                    , text response.region
                     ]
         ]
 
@@ -134,7 +133,7 @@ getPostcode : String -> Cmd Msg
 getPostcode code =
     Http.get
         { url = postcodeApiUrl ++ code
-        , expect = Http.expectJson (RemoteData.fromResult >> GotPostcode) responseDecoder
+        , expect = Http.expectJson (RemoteData.fromResult >> GotPostcode) postcodeDecoder
         }
 
 
