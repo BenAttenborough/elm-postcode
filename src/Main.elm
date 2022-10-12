@@ -1,118 +1,122 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, button, input, div, text)
-import Html.Events exposing (onClick)
+import Html exposing (Html, button, div, input, text)
 import Html.Attributes exposing (placeholder, value)
-import Html.Events exposing (onInput, on, keyCode)
+import Html.Events exposing (keyCode, on, onClick, onInput)
 import Http
 import Json.Decode as Decode exposing (Decoder, string)
 import Json.Decode.Pipeline exposing (required)
+import RemoteData
+
 
 postcodeApiUrl : String
-postcodeApiUrl = "https://api.postcodes.io/postcodes/"
+postcodeApiUrl =
+    "https://api.postcodes.io/postcodes/"
+
 
 type alias Model =
     { postCode : String
-    , isLoading : Bool 
-    , data : Maybe String
-    , details : Maybe Response }
+    , data : RemoteData.WebData String
+    }
 
 
-initialModel : () -> (Model, Cmd Msg)
+initialModel : () -> ( Model, Cmd Msg )
 initialModel _ =
-    ({ postCode = "" 
-    , isLoading = False
-    , data = Nothing
-    , details = Nothing
-    },
-    Cmd.none)
+    ( { postCode = ""
+      , data = RemoteData.NotAsked
+      }
+    , Cmd.none
+    )
+
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-  Sub.none
+    Sub.none
+
 
 postcodeDecoder : Decoder PostcodeDetails
-postcodeDecoder = 
+postcodeDecoder =
     Decode.succeed PostcodeDetails
         |> required "country" string
         |> required "region" string
 
+
 responseDecoder : Decoder Response
-responseDecoder = 
+responseDecoder =
     Decode.succeed Response
         |> required "status" Decode.int
         |> required "result" postcodeDecoder
+
 
 type Msg
     = OnChange String
     | OnKeyDown Int
     | Submit String
-    | Loading
-    | GotPostcode (Result Http.Error Response)
+    | GotPostcode (RemoteData.WebData String)
+
 
 type alias PostcodeDetails =
     { country : String
     , region : String
     }
 
+
 type alias Response =
     { status : Int
-    , result : PostcodeDetails}
+    , result : PostcodeDetails
+    }
 
 
-
-
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         OnChange code ->
-            ({ model | postCode = code }, Cmd.none)
-        
+            ( { model | postCode = code }, Cmd.none )
+
         Submit code ->
-            ({ model | isLoading = True}, (getPostcode code))
+            ( { model | data = RemoteData.Loading }, getPostcode code )
 
         OnKeyDown key ->
             if key == 13 then
-                ({ model | isLoading = True}, (getPostcode model.postCode))
+                ( { model | data = RemoteData.Loading }, getPostcode model.postCode )
+
             else
-                (model, Cmd.none)
+                ( model, Cmd.none )
 
-        Loading ->
-            (model, Cmd.none)
+        GotPostcode response ->
+            ( { model | data = response }
+            , Cmd.none
+            )
 
-        GotPostcode result ->
-            case result of
-                Ok code ->
-                    ({ model | isLoading = False, details = Just code}, Cmd.none)
-
-                Err _ ->
-                    ({ model | isLoading = False, details = Nothing}, Cmd.none)
 
 onKeyDown : (Int -> msg) -> Html.Attribute msg
 onKeyDown tagger =
     on "keydown" (Decode.map tagger keyCode)
 
+
 view : Model -> Html Msg
-view ({postCode, isLoading, details})  =
+view { postCode, data } =
     div []
         [ input [ placeholder "Postcode", value postCode, onInput OnChange, onKeyDown OnKeyDown ] []
         , button [ onClick (Submit postCode) ] [ text "Submit" ]
-        , div [] [
-            if isLoading then
-                text "Loading data"
-            else
-                text "Waiting for input"
-        ]
-        , case details of
-            Just data ->
-                div [] 
-                [text data.result.country
-                , text data.result.region
-                ]
+        , div []
+            []
+        , case data of
+            RemoteData.NotAsked ->
+                text "Initialising."
 
-            Nothing ->
-                div [] []
+            RemoteData.Loading ->
+                text "Loading."
+
+            RemoteData.Failure err ->
+                text ("Error: " ++ errorToString err)
+
+            RemoteData.Success news ->
+                div []
+                    [ text data.result.country
+                    , text data.result.region
+                    ]
         ]
 
 
@@ -124,11 +128,36 @@ main =
         , view = view
         , update = update
         }
- 
+
+
 getPostcode : String -> Cmd Msg
 getPostcode code =
     Http.get
-        {
-            url = postcodeApiUrl ++ code
-            , expect = Http.expectJson GotPostcode responseDecoder
+        { url = postcodeApiUrl ++ code
+        , expect = Http.expectJson (RemoteData.fromResult >> GotPostcode) responseDecoder
         }
+
+
+errorToString : Http.Error -> String
+errorToString error =
+    case error of
+        Http.BadUrl url ->
+            "The URL " ++ url ++ " was invalid"
+
+        Http.Timeout ->
+            "Unable to reach the server, try again"
+
+        Http.NetworkError ->
+            "Unable to reach the server, check your network connection"
+
+        Http.BadStatus 500 ->
+            "The server had a problem, try again later"
+
+        Http.BadStatus 400 ->
+            "Verify your information and try again"
+
+        Http.BadStatus _ ->
+            "Unknown error"
+
+        Http.BadBody errorMessage ->
+            errorMessage
