@@ -17,7 +17,7 @@ postcodeApiUrl =
 
 type alias Model =
     { postCode : String
-    , data : RemoteData.WebData String
+    , data : RemoteData.WebData Response
     }
 
 
@@ -53,7 +53,7 @@ type Msg
     = OnChange String
     | OnKeyDown Int
     | Submit String
-    | GotPostcode (RemoteData.WebData String)
+    | GotPostcode (RemoteData.WebData Response)
 
 
 type alias PostcodeDetails =
@@ -112,10 +112,10 @@ view { postCode, data } =
             RemoteData.Failure err ->
                 text ("Error: " ++ errorToString err)
 
-            RemoteData.Success news ->
+            RemoteData.Success response ->
                 div []
-                    [ text data.result.country
-                    , text data.result.region
+                    [ text response.result.country
+                    , text response.result.region
                     ]
         ]
 
