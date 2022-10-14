@@ -8,6 +8,11 @@ To compile run:
 
 `elm make src/Main.elm --optimize --output=elm.js`
 
+## Hot reloading
+
+I've installed [Elm watch](https://lydell.github.io/elm-watch/getting-started/)
+If you open `index.html` in a browser and run `npx elm-watch hot` it will refresh the page on save
+
 ## Instructions
 
 Please write a web application in a javascript framework (AngularJS preferred, but any is fine) or Elm that
@@ -22,20 +27,20 @@ we’re interested in how you build an application to directly interact with a R
 
 Details:
 
-* The main page should consist of a form with a text input field for the user to enter a postcode.
-* After submitting the form, the application should show:
-    * The country and region for the submitted postcode: API path /postcodes/{POSTCODE}
-    * A list of the nearest postcodes, and their countries and regions: API path
-/postcodes/{POSTCODE}/nearest
+-   The main page should consist of a form with a text input field for the user to enter a postcode.
+-   After submitting the form, the application should show:
+    _ The country and region for the submitted postcode: API path /postcodes/{POSTCODE}
+    _ A list of the nearest postcodes, and their countries and regions: API path
+    /postcodes/{POSTCODE}/nearest
 
-* The application should either work by entering a postcode in the form, or by browsing directly to
-<app_hostname>/<postcode>
-* The application URL should update to <app_hostname>/<postcode> after submitting the form.
-* Possible things to consider, time-depending:
-    * Unit tests
-    * Postcode validation
-    * Error handling (eg API failure / timeout)
-    * Suggestions of postcodes (autocomplete method as you type)
+-   The application should either work by entering a postcode in the form, or by browsing directly to
+    <app_hostname>/<postcode>
+-   The application URL should update to <app_hostname>/<postcode> after submitting the form.
+-   Possible things to consider, time-depending:
+    -   Unit tests
+    -   Postcode validation
+    -   Error handling (eg API failure / timeout)
+    -   Suggestions of postcodes (autocomplete method as you type)
 
 Test postcode to use: CB4 0GF (Featurespace Cambridge office)
 

@@ -1,5 +1,1845 @@
+// elm-watch hot {"version":"1.0.2","webSocketPort":35829}
+"use strict";
+(() => {
+  // node_modules/tiny-decoders/index.mjs
+  function number(value) {
+    if (typeof value !== "number") {
+      throw new DecoderError({ tag: "number", got: value });
+    }
+    return value;
+  }
+  function string(value) {
+    if (typeof value !== "string") {
+      throw new DecoderError({ tag: "string", got: value });
+    }
+    return value;
+  }
+  function stringUnion(mapping) {
+    return function stringUnionDecoder(value) {
+      const str = string(value);
+      if (!Object.prototype.hasOwnProperty.call(mapping, str)) {
+        throw new DecoderError({
+          tag: "unknown stringUnion variant",
+          knownVariants: Object.keys(mapping),
+          got: str
+        });
+      }
+      return str;
+    };
+  }
+  function unknownArray(value) {
+    if (!Array.isArray(value)) {
+      throw new DecoderError({ tag: "array", got: value });
+    }
+    return value;
+  }
+  function unknownRecord(value) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new DecoderError({ tag: "object", got: value });
+    }
+    return value;
+  }
+  function array(decoder) {
+    return function arrayDecoder(value) {
+      const arr = unknownArray(value);
+      const result = [];
+      for (let index = 0; index < arr.length; index++) {
+        try {
+          result.push(decoder(arr[index]));
+        } catch (error) {
+          throw DecoderError.at(error, index);
+        }
+      }
+      return result;
+    };
+  }
+  function record(decoder) {
+    return function recordDecoder(value) {
+      const object = unknownRecord(value);
+      const keys = Object.keys(object);
+      const result = {};
+      for (const key of keys) {
+        if (key === "__proto__") {
+          continue;
+        }
+        try {
+          result[key] = decoder(object[key]);
+        } catch (error) {
+          throw DecoderError.at(error, key);
+        }
+      }
+      return result;
+    };
+  }
+  function fields(callback, { exact = "allow extra", allow = "object" } = {}) {
+    return function fieldsDecoder(value) {
+      const object = allow === "array" ? unknownArray(value) : unknownRecord(value);
+      const knownFields = /* @__PURE__ */ Object.create(null);
+      function field(key, decoder) {
+        try {
+          const result2 = decoder(object[key]);
+          knownFields[key] = null;
+          return result2;
+        } catch (error) {
+          throw DecoderError.at(error, key);
+        }
+      }
+      const result = callback(field, object);
+      if (exact !== "allow extra") {
+        const unknownFields = Object.keys(object).filter((key) => !Object.prototype.hasOwnProperty.call(knownFields, key));
+        if (unknownFields.length > 0) {
+          throw new DecoderError({
+            tag: "exact fields",
+            knownFields: Object.keys(knownFields),
+            got: unknownFields
+          });
+        }
+      }
+      return result;
+    };
+  }
+  function fieldsAuto(mapping, { exact = "allow extra" } = {}) {
+    return function fieldsAutoDecoder(value) {
+      const object = unknownRecord(value);
+      const keys = Object.keys(mapping);
+      const result = {};
+      for (const key of keys) {
+        if (key === "__proto__") {
+          continue;
+        }
+        const decoder = mapping[key];
+        try {
+          result[key] = decoder(object[key]);
+        } catch (error) {
+          throw DecoderError.at(error, key);
+        }
+      }
+      if (exact !== "allow extra") {
+        const unknownFields = Object.keys(object).filter((key) => !Object.prototype.hasOwnProperty.call(mapping, key));
+        if (unknownFields.length > 0) {
+          throw new DecoderError({
+            tag: "exact fields",
+            knownFields: keys,
+            got: unknownFields
+          });
+        }
+      }
+      return result;
+    };
+  }
+  function fieldsUnion(key, mapping) {
+    return fields(function fieldsUnionFields(field, object) {
+      const tag = field(key, string);
+      if (Object.prototype.hasOwnProperty.call(mapping, tag)) {
+        const decoder = mapping[tag];
+        return decoder(object);
+      }
+      throw new DecoderError({
+        tag: "unknown fieldsUnion tag",
+        knownTags: Object.keys(mapping),
+        got: tag,
+        key
+      });
+    });
+  }
+  function multi(mapping) {
+    return function multiDecoder(value) {
+      if (value === void 0) {
+        if (mapping.undefined !== void 0) {
+          return mapping.undefined(value);
+        }
+      } else if (value === null) {
+        if (mapping.null !== void 0) {
+          return mapping.null(value);
+        }
+      } else if (typeof value === "boolean") {
+        if (mapping.boolean !== void 0) {
+          return mapping.boolean(value);
+        }
+      } else if (typeof value === "number") {
+        if (mapping.number !== void 0) {
+          return mapping.number(value);
+        }
+      } else if (typeof value === "string") {
+        if (mapping.string !== void 0) {
+          return mapping.string(value);
+        }
+      } else if (Array.isArray(value)) {
+        if (mapping.array !== void 0) {
+          return mapping.array(value);
+        }
+      } else {
+        if (mapping.object !== void 0) {
+          return mapping.object(value);
+        }
+      }
+      throw new DecoderError({
+        tag: "unknown multi type",
+        knownTypes: Object.keys(mapping),
+        got: value
+      });
+    };
+  }
+  function chain(decoder, next) {
+    return function chainDecoder(value) {
+      return next(decoder(value));
+    };
+  }
+  function formatDecoderErrorVariant(variant, options) {
+    const formatGot = (value) => {
+      const formatted = repr(value, options);
+      return (options === null || options === void 0 ? void 0 : options.sensitive) === true ? `${formatted}
+(Actual values are hidden in sensitive mode.)` : formatted;
+    };
+    const stringList = (strings) => strings.length === 0 ? "(none)" : strings.map((s) => JSON.stringify(s)).join(", ");
+    const got = (message, value) => value === DecoderError.MISSING_VALUE ? message : `${message}
+Got: ${formatGot(value)}`;
+    switch (variant.tag) {
+      case "boolean":
+      case "number":
+      case "string":
+        return got(`Expected a ${variant.tag}`, variant.got);
+      case "array":
+      case "object":
+        return got(`Expected an ${variant.tag}`, variant.got);
+      case "unknown multi type":
+        return `Expected one of these types: ${variant.knownTypes.length === 0 ? "never" : variant.knownTypes.join(", ")}
+Got: ${formatGot(variant.got)}`;
+      case "unknown fieldsUnion tag":
+        return `Expected one of these tags: ${stringList(variant.knownTags)}
+Got: ${formatGot(variant.got)}`;
+      case "unknown stringUnion variant":
+        return `Expected one of these variants: ${stringList(variant.knownVariants)}
+Got: ${formatGot(variant.got)}`;
+      case "exact fields":
+        return `Expected only these fields: ${stringList(variant.knownFields)}
+Found extra fields: ${formatGot(variant.got).replace(/^\[|\]$/g, "")}`;
+      case "tuple size":
+        return `Expected ${variant.expected} items
+Got: ${variant.got}`;
+      case "custom":
+        return got(variant.message, variant.got);
+    }
+  }
+  var DecoderError = class extends TypeError {
+    constructor({ key, ...params }) {
+      const variant = "tag" in params ? params : { tag: "custom", message: params.message, got: params.value };
+      super(`${formatDecoderErrorVariant(
+        variant,
+        { sensitive: true }
+      )}
+
+For better error messages, see https://github.com/lydell/tiny-decoders#error-messages`);
+      this.path = key === void 0 ? [] : [key];
+      this.variant = variant;
+      this.nullable = false;
+      this.optional = false;
+    }
+    static at(error, key) {
+      if (error instanceof DecoderError) {
+        if (key !== void 0) {
+          error.path.unshift(key);
+        }
+        return error;
+      }
+      return new DecoderError({
+        tag: "custom",
+        message: error instanceof Error ? error.message : String(error),
+        got: DecoderError.MISSING_VALUE,
+        key
+      });
+    }
+    format(options) {
+      const path = this.path.map((part) => `[${JSON.stringify(part)}]`).join("");
+      const nullableString = this.nullable ? " (nullable)" : "";
+      const optionalString = this.optional ? " (optional)" : "";
+      const variant = formatDecoderErrorVariant(this.variant, options);
+      return `At root${path}${nullableString}${optionalString}:
+${variant}`;
+    }
+  };
+  DecoderError.MISSING_VALUE = Symbol("DecoderError.MISSING_VALUE");
+  function repr(value, { recurse = true, maxArrayChildren = 5, maxObjectChildren = 3, maxLength = 100, recurseMaxLength = 20, sensitive = false } = {}) {
+    const type = typeof value;
+    const toStringType = Object.prototype.toString.call(value).replace(/^\[object\s+(.+)\]$/, "$1");
+    try {
+      if (value == null || type === "number" || type === "boolean" || type === "symbol" || toStringType === "RegExp") {
+        return sensitive ? toStringType.toLowerCase() : truncate(String(value), maxLength);
+      }
+      if (type === "string") {
+        return sensitive ? type : truncate(JSON.stringify(value), maxLength);
+      }
+      if (typeof value === "function") {
+        return `function ${truncate(JSON.stringify(value.name), maxLength)}`;
+      }
+      if (Array.isArray(value)) {
+        const arr = value;
+        if (!recurse && arr.length > 0) {
+          return `${toStringType}(${arr.length})`;
+        }
+        const lastIndex = arr.length - 1;
+        const items = [];
+        const end = Math.min(maxArrayChildren - 1, lastIndex);
+        for (let index = 0; index <= end; index++) {
+          const item = index in arr ? repr(arr[index], {
+            recurse: false,
+            maxLength: recurseMaxLength,
+            sensitive
+          }) : "<empty>";
+          items.push(item);
+        }
+        if (end < lastIndex) {
+          items.push(`(${lastIndex - end} more)`);
+        }
+        return `[${items.join(", ")}]`;
+      }
+      if (toStringType === "Object") {
+        const object = value;
+        const keys = Object.keys(object);
+        const { name } = object.constructor;
+        if (!recurse && keys.length > 0) {
+          return `${name}(${keys.length})`;
+        }
+        const numHidden = Math.max(0, keys.length - maxObjectChildren);
+        const items = keys.slice(0, maxObjectChildren).map((key2) => `${truncate(JSON.stringify(key2), recurseMaxLength)}: ${repr(object[key2], {
+          recurse: false,
+          maxLength: recurseMaxLength,
+          sensitive
+        })}`).concat(numHidden > 0 ? `(${numHidden} more)` : []);
+        const prefix = name === "Object" ? "" : `${name} `;
+        return `${prefix}{${items.join(", ")}}`;
+      }
+      return toStringType;
+    } catch (_error) {
+      return toStringType;
+    }
+  }
+  function truncate(str, maxLength) {
+    const half = Math.floor(maxLength / 2);
+    return str.length <= maxLength ? str : `${str.slice(0, half)}\u2026${str.slice(-half)}`;
+  }
+
+  // src/Helpers.ts
+  function join(array2, separator) {
+    return array2.join(separator);
+  }
+  function pad(number2) {
+    return number2.toString().padStart(2, "0");
+  }
+  function formatDate(date) {
+    return join(
+      [pad(date.getFullYear()), pad(date.getMonth() + 1), pad(date.getDate())],
+      "-"
+    );
+  }
+  function formatTime(date) {
+    return join(
+      [pad(date.getHours()), pad(date.getMinutes()), pad(date.getSeconds())],
+      ":"
+    );
+  }
+
+  // src/TeaProgram.ts
+  async function runTeaProgram(options) {
+    return new Promise((resolve, reject) => {
+      const [initialModel, initialCmds] = options.init;
+      let model = initialModel;
+      const msgQueue = [];
+      let killed = false;
+      const dispatch = (dispatchedMsg) => {
+        if (killed) {
+          return;
+        }
+        const alreadyRunning = msgQueue.length > 0;
+        msgQueue.push(dispatchedMsg);
+        if (alreadyRunning) {
+          return;
+        }
+        for (const msg of msgQueue) {
+          const [newModel, cmds] = options.update(msg, model);
+          model = newModel;
+          runCmds(cmds);
+        }
+        msgQueue.length = 0;
+      };
+      const runCmds = (cmds) => {
+        for (const cmd of cmds) {
+          options.runCmd(
+            cmd,
+            mutable,
+            dispatch,
+            (result) => {
+              cmds.length = 0;
+              killed = true;
+              resolve(result);
+            },
+            (error) => {
+              cmds.length = 0;
+              killed = true;
+              reject(error);
+            }
+          );
+          if (killed) {
+            break;
+          }
+        }
+      };
+      const mutable = options.initMutable(
+        dispatch,
+        (result) => {
+          killed = true;
+          resolve(result);
+        },
+        (error) => {
+          killed = true;
+          reject(error);
+        }
+      );
+      runCmds(initialCmds);
+    });
+  }
+
+  // src/Types.ts
+  var CompilationMode = stringUnion({
+    debug: null,
+    standard: null,
+    optimize: null
+  });
+
+  // client/WebSocketMessages.ts
+  var FocusedTabAcknowledged = fieldsAuto({
+    tag: () => "FocusedTabAcknowledged"
+  });
+  var StatusChanged = fieldsAuto({
+    tag: () => "StatusChanged",
+    status: fieldsUnion("tag", {
+      AlreadyUpToDate: fieldsAuto({
+        tag: () => "AlreadyUpToDate",
+        compilationMode: CompilationMode
+      }),
+      Busy: fieldsAuto({
+        tag: () => "Busy",
+        compilationMode: CompilationMode
+      }),
+      CompileError: fieldsAuto({
+        tag: () => "CompileError",
+        compilationMode: CompilationMode
+      }),
+      ClientError: fieldsAuto({
+        tag: () => "ClientError",
+        message: string
+      })
+    })
+  });
+  var SuccessfullyCompiled = fieldsAuto({
+    tag: () => "SuccessfullyCompiled",
+    code: string,
+    elmCompiledTimestamp: number,
+    compilationMode: CompilationMode
+  });
+  var SuccessfullyCompiledButRecordFieldsChanged = fieldsAuto({
+    tag: () => "SuccessfullyCompiledButRecordFieldsChanged"
+  });
+  var WebSocketToClientMessage = fieldsUnion("tag", {
+    FocusedTabAcknowledged,
+    StatusChanged,
+    SuccessfullyCompiled,
+    SuccessfullyCompiledButRecordFieldsChanged
+  });
+  var WebSocketToServerMessage = fieldsUnion("tag", {
+    ChangedCompilationMode: fieldsAuto({
+      tag: () => "ChangedCompilationMode",
+      compilationMode: CompilationMode
+    }),
+    FocusedTab: fieldsAuto({
+      tag: () => "FocusedTab"
+    })
+  });
+  function decodeWebSocketToClientMessage(message) {
+    if (message.startsWith("//")) {
+      const newlineIndexRaw = message.indexOf("\n");
+      const newlineIndex = newlineIndexRaw === -1 ? message.length : newlineIndexRaw;
+      const jsonString = message.slice(2, newlineIndex);
+      const parsed = SuccessfullyCompiled(JSON.parse(jsonString));
+      return { ...parsed, code: message };
+    } else {
+      return WebSocketToClientMessage(JSON.parse(message));
+    }
+  }
+
+  // client/client.ts
+  window.__ELM_WATCH_MOCKED_TIMINGS ?? (window.__ELM_WATCH_MOCKED_TIMINGS = false);
+  window.__ELM_WATCH_WEBSOCKET_TIMEOUT ?? (window.__ELM_WATCH_WEBSOCKET_TIMEOUT = 1e3);
+  window.__ELM_WATCH_ON_INIT ?? (window.__ELM_WATCH_ON_INIT = () => {
+  });
+  window.__ELM_WATCH_ON_RENDER ?? (window.__ELM_WATCH_ON_RENDER = () => {
+  });
+  window.__ELM_WATCH_ON_REACHED_IDLE_STATE ?? (window.__ELM_WATCH_ON_REACHED_IDLE_STATE = () => {
+  });
+  window.__ELM_WATCH_RELOAD_STATUSES ?? (window.__ELM_WATCH_RELOAD_STATUSES = {});
+  var RELOAD_MESSAGE_KEY = "__elmWatchReloadMessage";
+  window.__ELM_WATCH_RELOAD_PAGE ?? (window.__ELM_WATCH_RELOAD_PAGE = (message) => {
+    if (message !== void 0) {
+      try {
+        window.sessionStorage.setItem(RELOAD_MESSAGE_KEY, message);
+      } catch {
+      }
+    }
+    window.location.reload();
+  });
+  window.__ELM_WATCH_KILL_MATCHING ?? (window.__ELM_WATCH_KILL_MATCHING = () => Promise.resolve());
+  window.__ELM_WATCH_DISCONNECT ?? (window.__ELM_WATCH_DISCONNECT = () => {
+  });
+  window.__ELM_WATCH_LOG_DEBUG ?? (window.__ELM_WATCH_LOG_DEBUG = console.debug);
+  var VERSION = "1.0.2";
+  var TARGET_NAME = "My target name";
+  var INITIAL_ELM_COMPILED_TIMESTAMP = Number(
+    "1665739391719"
+  );
+  var ORIGINAL_COMPILATION_MODE = "standard";
+  var WEBSOCKET_PORT = "35829";
+  var CONTAINER_ID = "elm-watch";
+  var DEBUG = String("false") === "true";
+  var SEND_KEY_DO_NOT_USE_ALL_THE_TIME = Symbol(
+    "This value is supposed to only be obtained via `Status`."
+  );
+  function logDebug(...args) {
+    if (DEBUG) {
+      window.__ELM_WATCH_LOG_DEBUG(...args);
+    }
+  }
+  function run() {
+    try {
+      const message = window.sessionStorage.getItem(RELOAD_MESSAGE_KEY);
+      if (message !== null) {
+        console.info(message);
+        window.sessionStorage.removeItem(RELOAD_MESSAGE_KEY);
+      }
+    } catch {
+    }
+    const container = getOrCreateContainer();
+    const { shadowRoot } = container;
+    if (shadowRoot === null) {
+      throw new Error(
+        `elm-watch: Cannot set up hot reload, because an element with ID ${CONTAINER_ID} exists, but \`.shadowRoot\` is null!`
+      );
+    }
+    let root = shadowRoot.querySelector(`.${CLASS.root}`);
+    if (root === null) {
+      root = h(HTMLDivElement, { className: CLASS.root });
+      shadowRoot.append(root);
+    }
+    const existingTargetRoot = Array.from(root.children).find(
+      (element) => element.getAttribute("data-target") === TARGET_NAME
+    );
+    if (existingTargetRoot !== void 0) {
+      return;
+    }
+    const targetRoot = createTargetRoot(TARGET_NAME);
+    root.append(targetRoot);
+    const getNow = () => new Date();
+    runTeaProgram({
+      initMutable: initMutable(getNow, targetRoot),
+      init: init(getNow()),
+      update: (msg, model) => {
+        const [updatedModel, cmds] = update(msg, model);
+        const modelChanged = updatedModel !== model;
+        const newModel = modelChanged ? {
+          ...updatedModel,
+          previousStatusTag: model.status.tag
+        } : model;
+        const allCmds = modelChanged ? [
+          ...cmds,
+          {
+            tag: "UpdateGlobalStatus",
+            reloadStatus: statusToReloadStatus(newModel.status)
+          },
+          {
+            tag: "Render",
+            model: newModel,
+            manageFocus: msg.tag === "UiMsg"
+          }
+        ] : cmds;
+        logDebug(`${msg.tag} (${TARGET_NAME})`, msg, newModel, allCmds);
+        return [newModel, allCmds];
+      },
+      runCmd: runCmd(getNow, targetRoot)
+    }).catch((error) => {
+      console.error("elm-watch: Unexpectedly exited with error:", error);
+    });
+  }
+  function statusToReloadStatus(status) {
+    switch (status.tag) {
+      case "Busy":
+      case "Connecting":
+        return { tag: "MightWantToReload" };
+      case "CompileError":
+      case "EvalError":
+      case "Idle":
+      case "SleepingBeforeReconnect":
+      case "UnexpectedError":
+        return { tag: "NoReloadWanted" };
+      case "WaitingForReload":
+        return { tag: "ReloadRequested", reasons: status.reasons };
+    }
+  }
+  function statusToStatusType(statusTag) {
+    switch (statusTag) {
+      case "Idle":
+        return "Success";
+      case "Busy":
+      case "Connecting":
+      case "SleepingBeforeReconnect":
+      case "WaitingForReload":
+        return "Waiting";
+      case "CompileError":
+      case "EvalError":
+      case "UnexpectedError":
+        return "Error";
+    }
+  }
+  function getOrCreateContainer() {
+    const existing = document.getElementById(CONTAINER_ID);
+    if (existing !== null) {
+      return existing;
+    }
+    const container = h(HTMLDivElement, { id: CONTAINER_ID });
+    container.style.all = "unset";
+    container.style.position = "fixed";
+    container.style.zIndex = "2147483647";
+    container.style.left = "-1px";
+    container.style.bottom = "-1px";
+    const shadowRoot = container.attachShadow({ mode: "open" });
+    shadowRoot.append(h(HTMLStyleElement, {}, CSS));
+    document.documentElement.append(container);
+    return container;
+  }
+  function createTargetRoot(targetName) {
+    return h(HTMLDivElement, {
+      className: CLASS.targetRoot,
+      attrs: { "data-target": targetName }
+    });
+  }
+  var initMutable = (getNow, targetRoot) => (dispatch, resolvePromise) => {
+    const removeListeners = [
+      addEventListener(window, "focus", (event) => {
+        if (event instanceof CustomEvent && event.detail !== TARGET_NAME) {
+          return;
+        }
+        dispatch({ tag: "FocusedTab" });
+      }),
+      addEventListener(window, "visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          dispatch({ tag: "PageVisibilityChangedToVisible", date: getNow() });
+        }
+      })
+    ];
+    const mutable = {
+      removeListeners: () => {
+        for (const removeListener of removeListeners) {
+          removeListener();
+        }
+      },
+      webSocket: initWebSocket(
+        getNow,
+        INITIAL_ELM_COMPILED_TIMESTAMP,
+        dispatch
+      ),
+      webSocketTimeoutId: void 0
+    };
+    window.__ELM_WATCH_RELOAD_STATUSES[TARGET_NAME] = {
+      tag: "MightWantToReload"
+    };
+    const originalOnInit = window.__ELM_WATCH_ON_INIT;
+    window.__ELM_WATCH_ON_INIT = () => {
+      dispatch({ tag: "AppInit" });
+      originalOnInit();
+    };
+    const originalKillMatching = window.__ELM_WATCH_KILL_MATCHING;
+    window.__ELM_WATCH_KILL_MATCHING = (targetName) => new Promise((resolve, reject) => {
+      if (targetName.test(TARGET_NAME) && mutable.webSocket.readyState !== WebSocket.CLOSED) {
+        mutable.webSocket.addEventListener("close", () => {
+          originalKillMatching(targetName).then(resolve).catch(reject);
+        });
+        mutable.removeListeners();
+        mutable.webSocket.close();
+        if (mutable.webSocketTimeoutId !== void 0) {
+          clearTimeout(mutable.webSocketTimeoutId);
+          mutable.webSocketTimeoutId = void 0;
+        }
+        targetRoot.remove();
+        resolvePromise(void 0);
+      } else {
+        originalKillMatching(targetName).then(resolve).catch(reject);
+      }
+    });
+    const originalDisconnect = window.__ELM_WATCH_DISCONNECT;
+    window.__ELM_WATCH_DISCONNECT = (targetName) => {
+      if (targetName.test(TARGET_NAME) && mutable.webSocket.readyState !== WebSocket.CLOSED) {
+        mutable.webSocket.close();
+      } else {
+        originalDisconnect(targetName);
+      }
+    };
+    return mutable;
+  };
+  function addEventListener(target, eventName, listener) {
+    target.addEventListener(eventName, listener);
+    return () => {
+      target.removeEventListener(eventName, listener);
+    };
+  }
+  function initWebSocket(getNow, elmCompiledTimestamp, dispatch) {
+    const hostname = window.location.hostname === "" ? "localhost" : window.location.hostname;
+    const url = new URL(`ws://${hostname}:${WEBSOCKET_PORT}/`);
+    url.searchParams.set("elmWatchVersion", VERSION);
+    url.searchParams.set("targetName", TARGET_NAME);
+    url.searchParams.set("elmCompiledTimestamp", elmCompiledTimestamp.toString());
+    const webSocket = new WebSocket(url);
+    webSocket.addEventListener("open", () => {
+      dispatch({ tag: "WebSocketConnected", date: getNow() });
+    });
+    webSocket.addEventListener("close", () => {
+      dispatch({
+        tag: "WebSocketClosed",
+        date: getNow()
+      });
+    });
+    webSocket.addEventListener("message", (event) => {
+      dispatch({
+        tag: "WebSocketMessageReceived",
+        date: getNow(),
+        data: event.data
+      });
+    });
+    return webSocket;
+  }
+  var init = (date) => {
+    const status = { tag: "Connecting", date, attemptNumber: 1 };
+    const model = {
+      status,
+      previousStatusTag: status.tag,
+      compilationMode: ORIGINAL_COMPILATION_MODE,
+      elmCompiledTimestamp: INITIAL_ELM_COMPILED_TIMESTAMP,
+      uiExpanded: false
+    };
+    return [model, [{ tag: "Render", model, manageFocus: false }]];
+  };
+  function update(msg, model) {
+    switch (msg.tag) {
+      case "AppInit":
+        return [{ ...model }, []];
+      case "EvalErrored":
+        return [
+          {
+            ...model,
+            status: { tag: "EvalError", date: msg.date },
+            uiExpanded: true
+          },
+          [
+            {
+              tag: "TriggerReachedIdleState",
+              reason: "EvalErrored"
+            }
+          ]
+        ];
+      case "EvalNeedsReload":
+        return [
+          {
+            ...model,
+            status: {
+              tag: "WaitingForReload",
+              date: msg.date,
+              reasons: msg.reasons
+            },
+            uiExpanded: true
+          },
+          []
+        ];
+      case "EvalSucceeded":
+        return [
+          {
+            ...model,
+            status: {
+              tag: "Idle",
+              date: msg.date,
+              sendKey: SEND_KEY_DO_NOT_USE_ALL_THE_TIME
+            }
+          },
+          [
+            {
+              tag: "TriggerReachedIdleState",
+              reason: "EvalSucceeded"
+            }
+          ]
+        ];
+      case "FocusedTab":
+        return [
+          statusToStatusType(model.status.tag) === "Error" ? { ...model } : model,
+          model.status.tag === "Idle" ? [
+            {
+              tag: "SendMessage",
+              message: { tag: "FocusedTab" },
+              sendKey: model.status.sendKey
+            },
+            {
+              tag: "WebSocketTimeoutBegin"
+            }
+          ] : []
+        ];
+      case "PageVisibilityChangedToVisible":
+        return reconnect(model, msg.date, { force: true });
+      case "SleepBeforeReconnectDone":
+        return reconnect(model, msg.date, { force: false });
+      case "UiMsg":
+        return onUiMsg(msg.date, msg.msg, model);
+      case "WebSocketClosed": {
+        const attemptNumber = "attemptNumber" in model.status ? model.status.attemptNumber + 1 : 1;
+        return [
+          {
+            ...model,
+            status: {
+              tag: "SleepingBeforeReconnect",
+              date: msg.date,
+              attemptNumber
+            }
+          },
+          [{ tag: "SleepBeforeReconnect", attemptNumber }]
+        ];
+      }
+      case "WebSocketConnected":
+        return [{ ...model, status: { tag: "Busy", date: msg.date } }, []];
+      case "WebSocketMessageReceived": {
+        const result = parseWebSocketMessageData(msg.data);
+        switch (result.tag) {
+          case "Success":
+            return onWebSocketToClientMessage(msg.date, result.message, model);
+          case "Error":
+            return [
+              {
+                ...model,
+                status: {
+                  tag: "UnexpectedError",
+                  date: msg.date,
+                  message: result.message
+                },
+                uiExpanded: true
+              },
+              []
+            ];
+        }
+      }
+    }
+  }
+  function onUiMsg(date, msg, model) {
+    switch (msg.tag) {
+      case "ChangedCompilationMode":
+        return [
+          {
+            ...model,
+            status: { tag: "Busy", date },
+            compilationMode: msg.compilationMode
+          },
+          [
+            {
+              tag: "SendMessage",
+              message: {
+                tag: "ChangedCompilationMode",
+                compilationMode: msg.compilationMode
+              },
+              sendKey: msg.sendKey
+            }
+          ]
+        ];
+      case "PressedChevron":
+        return [{ ...model, uiExpanded: !model.uiExpanded }, []];
+      case "PressedReconnectNow":
+        return reconnect(model, date, { force: true });
+    }
+  }
+  function onWebSocketToClientMessage(date, msg, model) {
+    switch (msg.tag) {
+      case "FocusedTabAcknowledged":
+        return [model, [{ tag: "WebSocketTimeoutClear" }]];
+      case "StatusChanged":
+        return statusChanged(date, msg, model);
+      case "SuccessfullyCompiled":
+        return msg.compilationMode !== ORIGINAL_COMPILATION_MODE ? [
+          {
+            ...model,
+            status: {
+              tag: "WaitingForReload",
+              date,
+              reasons: ORIGINAL_COMPILATION_MODE === "proxy" ? [] : [
+                `compilation mode changed from ${ORIGINAL_COMPILATION_MODE} to ${msg.compilationMode}.`
+              ]
+            },
+            compilationMode: msg.compilationMode
+          },
+          []
+        ] : [
+          {
+            ...model,
+            compilationMode: msg.compilationMode,
+            elmCompiledTimestamp: msg.elmCompiledTimestamp
+          },
+          [{ tag: "Eval", code: msg.code }]
+        ];
+      case "SuccessfullyCompiledButRecordFieldsChanged":
+        return [
+          {
+            ...model,
+            status: {
+              tag: "WaitingForReload",
+              date,
+              reasons: [
+                `record field mangling in optimize mode was different than last time.`
+              ]
+            }
+          },
+          []
+        ];
+    }
+  }
+  function statusChanged(date, { status }, model) {
+    switch (status.tag) {
+      case "AlreadyUpToDate":
+        return [
+          {
+            ...model,
+            status: {
+              tag: "Idle",
+              date,
+              sendKey: SEND_KEY_DO_NOT_USE_ALL_THE_TIME
+            },
+            compilationMode: status.compilationMode
+          },
+          [
+            {
+              tag: "TriggerReachedIdleState",
+              reason: "AlreadyUpToDate"
+            }
+          ]
+        ];
+      case "Busy":
+        return [
+          {
+            ...model,
+            status: {
+              tag: "Busy",
+              date
+            },
+            compilationMode: status.compilationMode
+          },
+          []
+        ];
+      case "ClientError":
+        return [
+          {
+            ...model,
+            status: { tag: "UnexpectedError", date, message: status.message },
+            uiExpanded: true
+          },
+          [
+            {
+              tag: "TriggerReachedIdleState",
+              reason: "ClientError"
+            }
+          ]
+        ];
+      case "CompileError":
+        return [
+          {
+            ...model,
+            status: {
+              tag: "CompileError",
+              date,
+              sendKey: SEND_KEY_DO_NOT_USE_ALL_THE_TIME
+            },
+            compilationMode: status.compilationMode
+          },
+          [
+            {
+              tag: "TriggerReachedIdleState",
+              reason: "CompileError"
+            }
+          ]
+        ];
+    }
+  }
+  function reconnect(model, date, { force }) {
+    return model.status.tag === "SleepingBeforeReconnect" && (date.getTime() - model.status.date.getTime() >= retryWaitMs(model.status.attemptNumber) || force) ? [
+      {
+        ...model,
+        status: {
+          tag: "Connecting",
+          date,
+          attemptNumber: model.status.attemptNumber
+        }
+      },
+      [
+        {
+          tag: "Reconnect",
+          elmCompiledTimestamp: model.elmCompiledTimestamp
+        }
+      ]
+    ] : [model, []];
+  }
+  function retryWaitMs(attemptNumber) {
+    return Math.min(1e3 + 10 * attemptNumber ** 2, 1e3 * 60);
+  }
+  function printRetryWaitMs(attemptNumber) {
+    return `${retryWaitMs(attemptNumber) / 1e3} seconds`;
+  }
+  var runCmd = (getNow, targetRoot) => (cmd, mutable, dispatch, _resolvePromise, rejectPromise) => {
+    switch (cmd.tag) {
+      case "Eval": {
+        const f = new Function(cmd.code);
+        try {
+          f();
+          dispatch({ tag: "EvalSucceeded", date: getNow() });
+        } catch (unknownError) {
+          if (unknownError instanceof Error && unknownError.message.startsWith("ELM_WATCH_RELOAD_NEEDED")) {
+            dispatch({
+              tag: "EvalNeedsReload",
+              date: getNow(),
+              reasons: unknownError.message.split("\n\n---\n\n").slice(1)
+            });
+          } else {
+            void Promise.reject(unknownError);
+            dispatch({ tag: "EvalErrored", date: getNow() });
+          }
+        }
+        return;
+      }
+      case "Reconnect":
+        mutable.webSocket = initWebSocket(
+          getNow,
+          cmd.elmCompiledTimestamp,
+          dispatch
+        );
+        return;
+      case "Render":
+        render(
+          getNow,
+          targetRoot,
+          dispatch,
+          cmd.model,
+          {
+            version: VERSION,
+            webSocketUrl: mutable.webSocket.url,
+            targetName: TARGET_NAME,
+            originalCompilationMode: ORIGINAL_COMPILATION_MODE,
+            initializedElmAppsStatus: checkInitializedElmAppsStatus()
+          },
+          cmd.manageFocus
+        );
+        return;
+      case "SendMessage":
+        mutable.webSocket.send(JSON.stringify(cmd.message));
+        return;
+      case "SleepBeforeReconnect":
+        setTimeout(() => {
+          if (document.visibilityState === "visible") {
+            dispatch({ tag: "SleepBeforeReconnectDone", date: getNow() });
+          }
+        }, retryWaitMs(cmd.attemptNumber));
+        return;
+      case "TriggerReachedIdleState":
+        Promise.resolve().then(() => {
+          window.__ELM_WATCH_ON_REACHED_IDLE_STATE(cmd.reason);
+        }).catch(rejectPromise);
+        return;
+      case "UpdateGlobalStatus":
+        window.__ELM_WATCH_RELOAD_STATUSES[TARGET_NAME] = cmd.reloadStatus;
+        reloadPageIfNeeded();
+        return;
+      case "WebSocketTimeoutBegin":
+        if (mutable.webSocketTimeoutId === void 0) {
+          mutable.webSocketTimeoutId = setTimeout(() => {
+            mutable.webSocketTimeoutId = void 0;
+            mutable.webSocket.close();
+            dispatch({
+              tag: "WebSocketClosed",
+              date: getNow()
+            });
+          }, window.__ELM_WATCH_WEBSOCKET_TIMEOUT);
+        }
+        return;
+      case "WebSocketTimeoutClear":
+        if (mutable.webSocketTimeoutId !== void 0) {
+          clearTimeout(mutable.webSocketTimeoutId);
+          mutable.webSocketTimeoutId = void 0;
+        }
+        return;
+    }
+  };
+  function parseWebSocketMessageData(data) {
+    try {
+      return {
+        tag: "Success",
+        message: decodeWebSocketToClientMessage(string(data))
+      };
+    } catch (unknownError) {
+      return {
+        tag: "Error",
+        message: `Failed to decode web socket message sent from the server:
+${possiblyDecodeErrorToString(
+          unknownError
+        )}`
+      };
+    }
+  }
+  function possiblyDecodeErrorToString(unknownError) {
+    return unknownError instanceof DecoderError ? unknownError.format() : unknownError instanceof Error ? unknownError.message : repr(unknownError);
+  }
+  function functionToNull(value) {
+    return typeof value === "function" ? null : value;
+  }
+  var ProgramType = stringUnion({
+    "Platform.worker": null,
+    "Browser.sandbox": null,
+    "Browser.element": null,
+    "Browser.document": null,
+    "Browser.application": null,
+    Html: null
+  });
+  var ElmModule = chain(
+    record(
+      chain(
+        functionToNull,
+        multi({
+          null: () => [],
+          array: array(
+            fields((field) => field("__elmWatchProgramType", ProgramType))
+          ),
+          object: (value) => ElmModule(value)
+        })
+      )
+    ),
+    (record2) => Object.values(record2).flat()
+  );
+  var ProgramTypes = fields((field) => field("Elm", ElmModule));
+  function checkInitializedElmAppsStatus() {
+    if (window.Elm !== void 0 && "__elmWatchProxy" in window.Elm) {
+      return {
+        tag: "DebuggerModeStatus",
+        status: {
+          tag: "Disabled",
+          reason: noDebuggerYetReason
+        }
+      };
+    }
+    let programTypes;
+    try {
+      programTypes = ProgramTypes(window);
+    } catch (unknownError) {
+      return {
+        tag: "DecodeError",
+        message: possiblyDecodeErrorToString(unknownError)
+      };
+    }
+    if (programTypes.length === 0) {
+      return { tag: "NoProgramsAtAll" };
+    }
+    const noDebugger = programTypes.filter((programType) => {
+      switch (programType) {
+        case "Platform.worker":
+        case "Html":
+          return true;
+        case "Browser.sandbox":
+        case "Browser.element":
+        case "Browser.document":
+        case "Browser.application":
+          return false;
+      }
+    });
+    return {
+      tag: "DebuggerModeStatus",
+      status: noDebugger.length === programTypes.length ? {
+        tag: "Disabled",
+        reason: noDebuggerReason(new Set(noDebugger))
+      } : { tag: "Enabled" }
+    };
+  }
+  function reloadPageIfNeeded() {
+    let shouldReload = false;
+    const reasons = [];
+    for (const [targetName, reloadStatus] of Object.entries(
+      window.__ELM_WATCH_RELOAD_STATUSES
+    )) {
+      switch (reloadStatus.tag) {
+        case "MightWantToReload":
+          return;
+        case "NoReloadWanted":
+          break;
+        case "ReloadRequested":
+          shouldReload = true;
+          if (reloadStatus.reasons.length > 0) {
+            reasons.push([targetName, reloadStatus.reasons]);
+          }
+          break;
+      }
+    }
+    if (!shouldReload) {
+      return;
+    }
+    const first = reasons[0];
+    const [separator, reasonString] = reasons.length === 1 && first !== void 0 && first[1].length === 1 ? [" ", `${first[1].join("")}
+(target: ${first[0]})`] : [
+      ":\n\n",
+      reasons.map(
+        ([targetName, subReasons]) => [
+          targetName,
+          ...subReasons.map((subReason) => `- ${subReason}`)
+        ].join("\n")
+      ).join("\n\n")
+    ];
+    const message = reasons.length === 0 ? void 0 : `elm-watch: I did a full page reload because${separator}${reasonString}`;
+    window.__ELM_WATCH_RELOAD_STATUSES = {};
+    window.__ELM_WATCH_RELOAD_PAGE(message);
+  }
+  function h(t, {
+    attrs,
+    localName,
+    ...props
+  }, ...children) {
+    const element = document.createElement(
+      localName ?? t.name.replace(/^HTML(\w+)Element$/, "$1").replace("Anchor", "a").replace("Paragraph", "p").replace(/^([DOU])List$/, "$1l").toLowerCase()
+    );
+    Object.assign(element, props);
+    if (attrs !== void 0) {
+      for (const [key, value] of Object.entries(attrs)) {
+        element.setAttribute(key, value);
+      }
+    }
+    for (const child of children) {
+      if (child !== void 0) {
+        element.append(
+          typeof child === "string" ? document.createTextNode(child) : child
+        );
+      }
+    }
+    return element;
+  }
+  function render(getNow, targetRoot, dispatch, model, info, manageFocus) {
+    targetRoot.classList.toggle(
+      CLASS.targetRootBottomHalf,
+      getIsPositionedInBottomHalf(targetRoot)
+    );
+    targetRoot.replaceChildren(
+      view(
+        (msg) => {
+          dispatch({ tag: "UiMsg", date: getNow(), msg });
+        },
+        model,
+        info,
+        manageFocus
+      )
+    );
+    const firstFocusableElement = targetRoot.querySelector(`button, [tabindex]`);
+    if (manageFocus && firstFocusableElement instanceof HTMLElement) {
+      firstFocusableElement.focus();
+    }
+    window.__ELM_WATCH_ON_RENDER(TARGET_NAME);
+  }
+  function getIsPositionedInBottomHalf(targetRoot) {
+    const { top, height } = targetRoot.getBoundingClientRect();
+    return top + height / 2 > window.innerHeight / 2;
+  }
+  var CLASS = {
+    chevronButton: "chevronButton",
+    compilationModeWithIcon: "compilationModeWithIcon",
+    container: "container",
+    debugModeIcon: "debugModeIcon",
+    expandedUiContainer: "expandedUiContainer",
+    flashError: "flashError",
+    flashSuccess: "flashSuccess",
+    root: "root",
+    shortStatusContainer: "shortStatusContainer",
+    targetName: "targetName",
+    targetRoot: "targetRoot",
+    targetRootBottomHalf: "targetRootBottomHalf"
+  };
+  function getStatusClass({
+    statusType,
+    statusTypeChanged,
+    hasReceivedHotReload,
+    uiRelatedUpdate
+  }) {
+    switch (statusType) {
+      case "Success":
+        return statusTypeChanged && hasReceivedHotReload ? CLASS.flashSuccess : void 0;
+      case "Error":
+        return uiRelatedUpdate ? void 0 : CLASS.flashError;
+      case "Waiting":
+        return void 0;
+    }
+  }
+  var CSS = `
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  border-left: 0.25em solid var(--grey);
+  padding-left: 0.5em;
+}
+
+input,
+button,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  margin: 0;
+}
+
+fieldset {
+  display: grid;
+  gap: 0.25em;
+  margin: 0;
+  border: 1px solid var(--grey);
+  padding: 0.25em 0.75em 0.5em;
+}
+
+fieldset:disabled {
+  color: var(--grey);
+}
+
+p,
+dd {
+  margin: 0;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.25em 1em;
+  margin: 0;
+  white-space: nowrap;
+}
+
+dt {
+  text-align: right;
+  color: var(--grey);
+}
+
+time {
+  display: inline-grid;
+  overflow: hidden;
+}
+
+time::after {
+  content: attr(data-format);
+  visibility: hidden;
+  height: 0;
+}
+
+.${CLASS.root} {
+  --grey: #767676;
+  display: flex;
+  align-items: start;
+  overflow: auto;
+  max-height: 100vh;
+  max-width: 100vw;
+  color: black;
+  font-family: system-ui;
+}
+
+.${CLASS.targetRootBottomHalf} {
+  align-self: end;
+}
+
+.${CLASS.targetRoot} + .${CLASS.targetRoot} {
+  margin-left: -1px;
+}
+
+.${CLASS.targetRoot}:only-of-type .${CLASS.debugModeIcon},
+.${CLASS.targetRoot}:only-of-type .${CLASS.targetName} {
+  display: none;
+}
+
+.${CLASS.container} {
+  display: flex;
+  flex-direction: column-reverse;
+  background-color: white;
+  border: 1px solid var(--grey);
+}
+
+.${CLASS.targetRootBottomHalf} .${CLASS.container} {
+  flex-direction: column;
+}
+
+.${CLASS.expandedUiContainer} {
+  padding: 0.75em 1em;
+  display: grid;
+  gap: 0.75em;
+  outline: none;
+}
+
+.${CLASS.expandedUiContainer}:is(.length0, .length1) {
+  grid-template-columns: min-content;
+}
+
+.${CLASS.expandedUiContainer} > dl {
+  justify-self: start;
+}
+
+.${CLASS.expandedUiContainer} label {
+  display: grid;
+  grid-template-columns: min-content auto;
+  align-items: center;
+  gap: 0.25em;
+}
+
+.${CLASS.expandedUiContainer} label.Disabled {
+  color: var(--grey);
+}
+
+.${CLASS.expandedUiContainer} label > small {
+  grid-column: 2;
+}
+
+.${CLASS.compilationModeWithIcon} {
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+}
+
+.${CLASS.shortStatusContainer} {
+  line-height: 1;
+  padding: 0.25em;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+}
+
+.${CLASS.flashError}::before,
+.${CLASS.flashSuccess}::before {
+  content: "";
+  position: absolute;
+  margin-top: 0.5em;
+  margin-left: 0.5em;
+  --size: min(500px, 100vmin);
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  animation: flash 0.7s 0.05s ease-out both;
+  pointer-events: none;
+}
+
+.${CLASS.flashError}::before {
+  background-color: #eb0000;
+}
+
+.${CLASS.flashSuccess}::before {
+  background-color: #00b600;
+}
+
+@keyframes flash {
+  from {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0.9;
+  }
+
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes nudge {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .${CLASS.flashError}::before,
+  .${CLASS.flashSuccess}::before {
+    transform: translate(-50%, -50%);
+    width: 2em;
+    height: 2em;
+    animation: nudge 0.25s ease-in-out 4 alternate forwards;
+  }
+}
+
+.${CLASS.chevronButton} {
+  appearance: none;
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+`;
+  function view(dispatch, passedModel, info, manageFocus) {
+    const model = window.__ELM_WATCH_MOCKED_TIMINGS ? {
+      ...passedModel,
+      status: {
+        ...passedModel.status,
+        date: new Date("2022-02-05T13:10:05Z")
+      }
+    } : passedModel;
+    const statusData = viewStatus(
+      dispatch,
+      model.status,
+      model.compilationMode,
+      info
+    );
+    const statusType = statusToStatusType(model.status.tag);
+    const statusTypeChanged = statusType !== statusToStatusType(model.previousStatusTag);
+    const statusClass = getStatusClass({
+      statusType,
+      statusTypeChanged,
+      hasReceivedHotReload: model.elmCompiledTimestamp !== INITIAL_ELM_COMPILED_TIMESTAMP,
+      uiRelatedUpdate: manageFocus
+    });
+    return h(
+      HTMLDivElement,
+      { className: CLASS.container },
+      model.uiExpanded ? viewExpandedUi(model.status, statusData, info) : void 0,
+      h(
+        HTMLDivElement,
+        {
+          className: CLASS.shortStatusContainer,
+          onclick: () => {
+            dispatch({ tag: "PressedChevron" });
+          }
+        },
+        h(
+          HTMLButtonElement,
+          {
+            className: CLASS.chevronButton,
+            attrs: { "aria-expanded": model.uiExpanded.toString() }
+          },
+          icon(
+            model.uiExpanded ? "\u25B2" : "\u25BC",
+            model.uiExpanded ? "Collapse elm-watch" : "Expand elm-watch"
+          )
+        ),
+        compilationModeIcon(model.compilationMode),
+        icon(
+          statusData.icon,
+          statusData.status,
+          statusClass === void 0 ? {} : {
+            className: statusClass,
+            onanimationend: (event) => {
+              if (event.currentTarget instanceof HTMLElement) {
+                event.currentTarget.classList.remove(statusClass);
+              }
+            }
+          }
+        ),
+        h(
+          HTMLTimeElement,
+          { dateTime: model.status.date.toISOString() },
+          formatTime(model.status.date)
+        ),
+        h(HTMLSpanElement, { className: CLASS.targetName }, TARGET_NAME)
+      )
+    );
+  }
+  function icon(emoji, alt, props) {
+    return h(
+      HTMLSpanElement,
+      { attrs: { "aria-label": alt }, ...props },
+      h(HTMLSpanElement, { attrs: { "aria-hidden": "true" } }, emoji)
+    );
+  }
+  function viewExpandedUi(status, statusData, info) {
+    const items = [
+      ["target", info.targetName],
+      ["elm-watch", info.version],
+      ["web socket", new URL(info.webSocketUrl).origin],
+      [
+        "updated",
+        h(
+          HTMLTimeElement,
+          {
+            dateTime: status.date.toISOString(),
+            attrs: { "data-format": "2044-04-30 04:44:44" }
+          },
+          `${formatDate(status.date)} ${formatTime(status.date)}`
+        )
+      ],
+      ["status", statusData.status],
+      ...statusData.dl
+    ];
+    return h(
+      HTMLDivElement,
+      {
+        className: `${CLASS.expandedUiContainer} length${statusData.content.length}`,
+        attrs: {
+          tabindex: "-1"
+        }
+      },
+      h(
+        HTMLDListElement,
+        {},
+        ...items.flatMap(([key, value]) => [
+          h(HTMLElement, { localName: "dt" }, key),
+          h(HTMLElement, { localName: "dd" }, value)
+        ])
+      ),
+      ...statusData.content
+    );
+  }
+  function viewStatus(dispatch, status, compilationMode, info) {
+    switch (status.tag) {
+      case "Busy":
+        return {
+          icon: "\u23F3",
+          status: "Waiting for compilation",
+          dl: [],
+          content: viewCompilationModeChooser({
+            dispatch,
+            sendKey: void 0,
+            compilationMode,
+            warnAboutCompilationModeMismatch: false,
+            info
+          })
+        };
+      case "CompileError":
+        return {
+          icon: "\u{1F6A8}",
+          status: "Compilation error",
+          dl: [],
+          content: [
+            ...viewCompilationModeChooser({
+              dispatch,
+              sendKey: status.sendKey,
+              compilationMode,
+              warnAboutCompilationModeMismatch: true,
+              info
+            }),
+            h(
+              HTMLParagraphElement,
+              {},
+              h(
+                HTMLElement,
+                { localName: "strong" },
+                "Check the terminal to see errors!"
+              )
+            )
+          ]
+        };
+      case "Connecting":
+        return {
+          icon: "\u{1F50C}",
+          status: "Connecting",
+          dl: [
+            ["attempt", status.attemptNumber.toString()],
+            ["sleep", printRetryWaitMs(status.attemptNumber)]
+          ],
+          content: [
+            h(HTMLButtonElement, { disabled: true }, "Connecting web socket\u2026")
+          ]
+        };
+      case "EvalError":
+        return {
+          icon: "\u26D4\uFE0F",
+          status: "Eval error",
+          dl: [],
+          content: [
+            h(
+              HTMLParagraphElement,
+              {},
+              "Check the console in the browser developer tools to see errors!"
+            )
+          ]
+        };
+      case "Idle":
+        return {
+          icon: idleIcon(info.initializedElmAppsStatus),
+          status: "Successfully compiled",
+          dl: [],
+          content: viewCompilationModeChooser({
+            dispatch,
+            sendKey: status.sendKey,
+            compilationMode,
+            warnAboutCompilationModeMismatch: true,
+            info
+          })
+        };
+      case "SleepingBeforeReconnect":
+        return {
+          icon: "\u{1F50C}",
+          status: "Sleeping",
+          dl: [
+            ["attempt", status.attemptNumber.toString()],
+            ["sleep", printRetryWaitMs(status.attemptNumber)]
+          ],
+          content: [
+            h(
+              HTMLButtonElement,
+              {
+                onclick: () => {
+                  dispatch({ tag: "PressedReconnectNow" });
+                }
+              },
+              "Reconnect web socket now"
+            )
+          ]
+        };
+      case "UnexpectedError":
+        return {
+          icon: "\u274C",
+          status: "Unexpected error",
+          dl: [],
+          content: [
+            h(
+              HTMLParagraphElement,
+              {},
+              "I ran into an unexpected error! This is the error message:"
+            ),
+            h(HTMLPreElement, {}, status.message)
+          ]
+        };
+      case "WaitingForReload":
+        return {
+          icon: "\u23F3",
+          status: "Waiting for reload",
+          dl: [],
+          content: [
+            h(
+              HTMLParagraphElement,
+              {},
+              "Waiting for other targets to finish compiling\u2026"
+            )
+          ]
+        };
+    }
+  }
+  function idleIcon(status) {
+    switch (status.tag) {
+      case "DecodeError":
+        return "\u274C";
+      case "NoProgramsAtAll":
+        return "\u2753";
+      case "DebuggerModeStatus":
+        return "\u2705";
+    }
+  }
+  function compilationModeIcon(compilationMode) {
+    switch (compilationMode) {
+      case "proxy":
+        return void 0;
+      case "debug":
+        return icon("\u{1F41B}", "Debug mode", { className: CLASS.debugModeIcon });
+      case "standard":
+        return void 0;
+      case "optimize":
+        return icon("\u{1F680}", "Optimize mode");
+    }
+  }
+  var noDebuggerYetReason = "The Elm debugger isn't available at this point.";
+  function noDebuggerReason(noDebuggerProgramTypes) {
+    return `The Elm debugger isn't supported by ${humanList(
+      Array.from(noDebuggerProgramTypes, (programType) => `\`${programType}\``),
+      "and"
+    )} programs.`;
+  }
+  function humanList(list, joinWord) {
+    const { length } = list;
+    return length <= 1 ? list.join("") : length === 2 ? list.join(` ${joinWord} `) : `${list.slice(0, length - 2).join(", ")}, ${list.slice(-2).join(` ${joinWord} `)}`;
+  }
+  function viewCompilationModeChooser({
+    dispatch,
+    sendKey,
+    compilationMode: selectedMode,
+    warnAboutCompilationModeMismatch,
+    info
+  }) {
+    switch (info.initializedElmAppsStatus.tag) {
+      case "DecodeError":
+        return [
+          h(
+            HTMLParagraphElement,
+            {},
+            "window.Elm does not look like expected! This is the error message:"
+          ),
+          h(HTMLPreElement, {}, info.initializedElmAppsStatus.message)
+        ];
+      case "NoProgramsAtAll":
+        return [
+          h(
+            HTMLParagraphElement,
+            {},
+            "It looks like no Elm apps were initialized by elm-watch. Check the console in the browser developer tools to see potential errors!"
+          )
+        ];
+      case "DebuggerModeStatus": {
+        const compilationModes = [
+          {
+            mode: "debug",
+            name: "Debug",
+            status: info.initializedElmAppsStatus.status
+          },
+          { mode: "standard", name: "Standard", status: { tag: "Enabled" } },
+          { mode: "optimize", name: "Optimize", status: { tag: "Enabled" } }
+        ];
+        return [
+          h(
+            HTMLFieldSetElement,
+            { disabled: sendKey === void 0 },
+            h(HTMLLegendElement, {}, "Compilation mode"),
+            ...compilationModes.map(({ mode, name, status }) => {
+              const nameWithIcon = h(
+                HTMLSpanElement,
+                { className: CLASS.compilationModeWithIcon },
+                name,
+                mode === selectedMode ? compilationModeIcon(mode) : void 0
+              );
+              return h(
+                HTMLLabelElement,
+                { className: status.tag },
+                h(HTMLInputElement, {
+                  type: "radio",
+                  name: `CompilationMode-${info.targetName}`,
+                  value: mode,
+                  checked: mode === selectedMode,
+                  disabled: sendKey === void 0 || status.tag === "Disabled",
+                  onchange: sendKey === void 0 ? void 0 : () => {
+                    dispatch({
+                      tag: "ChangedCompilationMode",
+                      compilationMode: mode,
+                      sendKey
+                    });
+                  }
+                }),
+                ...status.tag === "Enabled" ? [
+                  nameWithIcon,
+                  warnAboutCompilationModeMismatch && mode === selectedMode && selectedMode !== info.originalCompilationMode && info.originalCompilationMode !== "proxy" ? h(
+                    HTMLElement,
+                    { localName: "small" },
+                    `Note: The code currently running is in ${ORIGINAL_COMPILATION_MODE} mode.`
+                  ) : void 0
+                ] : [
+                  nameWithIcon,
+                  h(HTMLElement, { localName: "small" }, status.reason)
+                ]
+              );
+            })
+          )
+        ];
+      }
+    }
+  }
+  run();
+})();
 (function(scope){
 'use strict';
+
+var _Platform_effectManagers = {}, _Scheduler_enqueue; // added by elm-watch
 
 function F(arity, fun, wrapper) {
   wrapper.a = arity;
@@ -1662,12 +3502,14 @@ function _Scheduler_fail(error)
 	};
 }
 
+// This function was slightly modified by elm-watch.
 function _Scheduler_binding(callback)
 {
 	return {
 		$: 2,
 		b: callback,
-		c: null
+		// c: null // commented out by elm-watch
+		c: Function.prototype // added by elm-watch
 	};
 }
 
@@ -1810,7 +3652,8 @@ function _Scheduler_step(proc)
 			proc.f.c = proc.f.b(function(newRoot) {
 				proc.f = newRoot;
 				_Scheduler_enqueue(proc);
-			});
+			// }); // commented out by elm-watch
+			}) || Function.prototype; // added by elm-watch
 			return;
 		}
 		else if (rootTag === 5)
@@ -1852,14 +3695,18 @@ function _Process_sleep(time)
 // PROGRAMS
 
 
+// This function was slightly modified by elm-watch.
 var _Platform_worker = F4(function(impl, flagDecoder, debugMetadata, args)
 {
 	return _Platform_initialize(
+		"Platform.worker", // added by elm-watch
+		debugMetadata, // added by elm-watch
 		flagDecoder,
 		args,
 		impl.init,
-		impl.update,
-		impl.subscriptions,
+		// impl.update, // commented out by elm-watch
+		// impl.subscriptions, // commented out by elm-watch
+		impl, // added by elm-watch
 		function() { return function() {} }
 	);
 });
@@ -1869,26 +3716,176 @@ var _Platform_worker = F4(function(impl, flagDecoder, debugMetadata, args)
 // INITIALIZE A PROGRAM
 
 
-function _Platform_initialize(flagDecoder, args, init, update, subscriptions, stepperBuilder)
+// This whole function was changed by elm-watch.
+function _Platform_initialize(programType, debugMetadata, flagDecoder, args, init, impl, stepperBuilder)
 {
-	var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
-	$elm$core$Result$isOk(result) || _Debug_crash(2 /**/, _Json_errorToString(result.a) /**/);
+	if (args === "__elmWatchReturnData") {
+		return { impl: impl, debugMetadata: debugMetadata, flagDecoder : flagDecoder, programType: programType };
+	}
+
+	var flags = _Json_wrap(args ? args['flags'] : undefined);
+	var flagResult = A2(_Json_run, flagDecoder, flags);
+	$elm$core$Result$isOk(flagResult) || _Debug_crash(2 /**/, _Json_errorToString(flagResult.a) /**/);
 	var managers = {};
-	var initPair = init(result.a);
+	var initUrl = programType === "Browser.application" ? _Browser_getUrl() : undefined;
+	window.__ELM_WATCH_INIT_URL = initUrl;
+	var initPair = init(flagResult.a);
 	var model = initPair.a;
 	var stepper = stepperBuilder(sendToApp, model);
 	var ports = _Platform_setupEffects(managers, sendToApp);
+	var update;
+	var subscriptions;
 
-	function sendToApp(msg, viewMetadata)
-	{
+	function setUpdateAndSubscriptions() {
+		update = impl.update || impl._impl.update;
+		subscriptions = impl.subscriptions || impl._impl.subscriptions;
+		if (typeof $elm$browser$Debugger$Main$wrapUpdate !== "undefined") {
+			update = $elm$browser$Debugger$Main$wrapUpdate(update);
+			subscriptions = $elm$browser$Debugger$Main$wrapSubs(subscriptions);
+		}
+	}
+
+	function sendToApp(msg, viewMetadata) {
 		var pair = A2(update, msg, model);
 		stepper(model = pair.a, viewMetadata);
 		_Platform_enqueueEffects(managers, pair.b, subscriptions(model));
 	}
 
+	setUpdateAndSubscriptions();
 	_Platform_enqueueEffects(managers, initPair.b, subscriptions(model));
 
-	return ports ? { ports: ports } : {};
+	function __elmWatchHotReload(newData, new_Platform_effectManagers, new_Scheduler_enqueue, moduleName) {
+		_Platform_enqueueEffects(managers, _Platform_batch(_List_Nil), _Platform_batch(_List_Nil));
+		_Scheduler_enqueue = new_Scheduler_enqueue;
+
+		for (var key in new_Platform_effectManagers) {
+			var manager = new_Platform_effectManagers[key];
+			if (!(key in _Platform_effectManagers)) {
+				_Platform_effectManagers[key] = manager;
+				managers[key] = _Platform_instantiateManager(manager, sendToApp);
+				if (manager.a) {
+					console.info("elm-watch: A new port '" + key + "' was added. You might want to reload the page!");
+					manager.a(key, sendToApp)
+				}
+			}
+		}
+
+		for (var key in newData.impl) {
+			if (key === "_impl" && impl._impl) {
+				for (var subKey in newData.impl[key]) {
+					impl._impl[subKey] = newData.impl[key][subKey];
+				}
+			} else {
+				impl[key] = newData.impl[key];
+			}
+		}
+
+		var newFlagResult = A2(_Json_run, newData.flagDecoder, flags);
+		if (!$elm$core$Result$isOk(newFlagResult)) {
+			return { tag: "ReloadPage", reason: "the flags type in `" + moduleName + "` changed and now the passed flags aren't correct anymore. The idea is to try to run with new flags!\nThis is the error:\n" + _Json_errorToString(newFlagResult.a) };
+		}
+		if (!_Utils_eq_elmWatchInternal(debugMetadata, newData.debugMetadata)) {
+			return { tag: "ReloadPage", reason: "the message type in `" + moduleName + '` changed in debug mode ("debug metadata" changed).' };
+		}
+		init = impl.init || impl._impl.init;
+		if (typeof $elm$browser$Debugger$Main$wrapInit !== "undefined") {
+			init = A3($elm$browser$Debugger$Main$wrapInit, _Json_wrap(newData.debugMetadata), initPair.a.popout, init);
+		}
+		window.__ELM_WATCH_INIT_URL = initUrl;
+		var newInitPair = init(newFlagResult.a);
+		if (!_Utils_eq_elmWatchInternal(initPair, newInitPair)) {
+			return { tag: "ReloadPage", reason: "`" + moduleName + ".init` returned something different than last time. Let's start fresh!" };
+		}
+
+		setUpdateAndSubscriptions();
+		stepper(model, true /* isSync */);
+		_Platform_enqueueEffects(managers, _Platform_batch(_List_Nil), subscriptions(model));
+		return { tag: "Success" };
+	}
+
+	return Object.defineProperties(
+		ports ? { ports: ports } : {},
+		{
+			__elmWatchHotReload: { value: __elmWatchHotReload },
+			__elmWatchProgramType: { value: programType },
+		}
+	);
+}
+
+// This whole function was added by elm-watch.
+// Copy-paste of _Utils_eq but does not assume that x and y have the same type,
+// and considers functions to always be equal.
+function _Utils_eq_elmWatchInternal(x, y)
+{
+	for (
+		var pair, stack = [], isEqual = _Utils_eqHelp_elmWatchInternal(x, y, 0, stack);
+		isEqual && (pair = stack.pop());
+		isEqual = _Utils_eqHelp_elmWatchInternal(pair.a, pair.b, 0, stack)
+		)
+	{}
+
+	return isEqual;
+}
+
+// This whole function was added by elm-watch.
+function _Utils_eqHelp_elmWatchInternal(x, y, depth, stack)
+{
+	if (x === y) {
+		return true;
+	}
+
+	var xType = _Utils_typeof_elmWatchInternal(x);
+	var yType = _Utils_typeof_elmWatchInternal(y);
+
+	if (xType !== yType) {
+		return false;
+	}
+
+	switch (xType) {
+		case "primitive":
+			return false;
+		case "function":
+			return true;
+	}
+
+	if (x.$ !== y.$) {
+		return false;
+	}
+
+	if (x.$ === 'Set_elm_builtin') {
+		x = $elm$core$Set$toList(x);
+		y = $elm$core$Set$toList(y);
+	} else if (x.$ === 'RBNode_elm_builtin' || x.$ === 'RBEmpty_elm_builtin' || x.$ < 0) {
+		x = $elm$core$Dict$toList(x);
+		y = $elm$core$Dict$toList(y);
+	}
+
+	if (Object.keys(x).length !== Object.keys(y).length) {
+		return false;
+	}
+
+	if (depth > 100) {
+		stack.push(_Utils_Tuple2(x, y));
+		return true;
+	}
+
+	for (var key in x) {
+		if (!_Utils_eqHelp_elmWatchInternal(x[key], y[key], depth + 1, stack)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// This whole function was added by elm-watch.
+function _Utils_typeof_elmWatchInternal(x)
+{
+	var type = typeof x;
+	return type === "function"
+		? "function"
+		: type !== "object" || type === null
+		? "primitive"
+		: "objectOrArray";
 }
 
 
@@ -2337,11 +4334,62 @@ function _Platform_mergeExportsProd(obj, exports)
 }
 
 
+// This whole function was changed by elm-watch.
 function _Platform_export(exports)
 {
-	scope['Elm']
-		? _Platform_mergeExportsDebug('Elm', scope['Elm'], exports)
-		: scope['Elm'] = exports;
+	var reloadReasons = _Platform_mergeExportsElmWatch('Elm', scope['Elm'] || (scope['Elm'] = {}), exports);
+	if (reloadReasons.length > 0) {
+		throw new Error(["ELM_WATCH_RELOAD_NEEDED"].concat(Array.from(new Set(reloadReasons))).join("\n\n---\n\n"));
+	}
+}
+
+// This whole function was added by elm-watch.
+function _Platform_mergeExportsElmWatch(moduleName, obj, exports)
+{
+	var reloadReasons = [];
+	for (var name in exports) {
+		if (name === "init") {
+			if ("init" in obj) {
+				if ("__elmWatchApps" in obj) {
+					var data = exports.init("__elmWatchReturnData");
+					for (var index = 0; index < obj.__elmWatchApps.length; index++) {
+						var app = obj.__elmWatchApps[index];
+						if (app.__elmWatchProgramType !== data.programType) {
+							reloadReasons.push("`" + moduleName + ".main` changed from `" + app.__elmWatchProgramType + "` to `" + data.programType + "`.");
+						} else {
+							var result;
+							try {
+								result = app.__elmWatchHotReload(data, _Platform_effectManagers, _Scheduler_enqueue, moduleName);
+								switch (result.tag) {
+									case "Success":
+										break;
+									case "ReloadPage":
+										reloadReasons.push(result.reason);
+										break;
+								}
+							} catch (error) {
+								reloadReasons.push("hot reload for `" + moduleName + "` failed, probably because of incompatible model changes.\nThis is the error:\n" + error + "\n" + (error ? error.stack : ""));
+							}
+						}
+					}
+				} else {
+					throw new Error("elm-watch: I'm trying to create `" + moduleName + ".init`, but it already exists and wasn't created by elm-watch. Maybe a duplicate script is getting loaded accidentally?");
+				}
+			} else {
+				obj.__elmWatchApps = [];
+				obj.init = function() {
+					var app = exports.init.apply(exports, arguments);
+					obj.__elmWatchApps.push(app);
+					window.__ELM_WATCH_ON_INIT();
+					return app;
+				};
+			}
+		} else {
+			var innerReasons = _Platform_mergeExportsElmWatch(moduleName + "." + name, obj[name] || (obj[name] = {}), exports[name]);
+			reloadReasons = reloadReasons.concat(innerReasons);
+		}
+	}
+	return reloadReasons;
 }
 
 
@@ -2373,23 +4421,41 @@ function _VirtualDom_appendChild(parent, child)
 	parent.appendChild(child);
 }
 
+// This whole function was changed by elm-watch.
 var _VirtualDom_init = F4(function(virtualNode, flagDecoder, debugMetadata, args)
 {
-	// NOTE: this function needs _Platform_export available to work
+	var programType = "Html";
 
-	/**_UNUSED/
+	if (args === "__elmWatchReturnData") {
+		return { virtualNode: virtualNode, programType: programType };
+	}
+
+	/**_UNUSED/ // always UNUSED with elm-watch
 	var node = args['node'];
 	//*/
 	/**/
 	var node = args && args['node'] ? args['node'] : _Debug_crash(0);
 	//*/
 
-	node.parentNode.replaceChild(
-		_VirtualDom_render(virtualNode, function() {}),
-		node
-	);
+	var nextNode = _VirtualDom_render(virtualNode, function() {});
+	node.parentNode.replaceChild(nextNode, node);
+	node = nextNode;
+	var sendToApp = function() {};
 
-	return {};
+	function __elmWatchHotReload(newData) {
+		var patches = _VirtualDom_diff(virtualNode, newData.virtualNode);
+		node = _VirtualDom_applyPatches(node, virtualNode, patches, sendToApp);
+		virtualNode = newData.virtualNode;
+		return { tag: "Success" };
+	}
+
+	return Object.defineProperties(
+		{},
+		{
+			__elmWatchHotReload: { value: __elmWatchHotReload },
+			__elmWatchProgramType: { value: programType },
+		}
+	);
 });
 
 
@@ -3938,17 +6004,21 @@ function _VirtualDom_dekey(keyedNode)
 
 var _Debugger_element;
 
+// This function was slightly modified by elm-watch.
 var _Browser_element = _Debugger_element || F4(function(impl, flagDecoder, debugMetadata, args)
 {
 	return _Platform_initialize(
+		impl._impl ? "Browser.sandbox" : "Browser.element", // added by elm-watch
+		debugMetadata, // added by elm-watch
 		flagDecoder,
 		args,
 		impl.init,
-		impl.update,
-		impl.subscriptions,
+		// impl.update, // commented out by elm-watch
+		// impl.subscriptions, // commented out by elm-watch
+		impl, // added by elm-watch
 		function(sendToApp, initialModel) {
-			var view = impl.view;
-			/**_UNUSED/
+			// var view = impl.view; // commented out by elm-watch
+			/**_UNUSED/ // always UNUSED with elm-watch
 			var domNode = args['node'];
 			//*/
 			/**/
@@ -3958,7 +6028,8 @@ var _Browser_element = _Debugger_element || F4(function(impl, flagDecoder, debug
 
 			return _Browser_makeAnimator(initialModel, function(model)
 			{
-				var nextNode = view(model);
+				// var nextNode = view(model); // commented out by elm-watch
+				var nextNode = impl.view(model); // added by elm-watch
 				var patches = _VirtualDom_diff(currNode, nextNode);
 				domNode = _VirtualDom_applyPatches(domNode, currNode, patches, sendToApp);
 				currNode = nextNode;
@@ -3974,24 +6045,29 @@ var _Browser_element = _Debugger_element || F4(function(impl, flagDecoder, debug
 
 var _Debugger_document;
 
+// This function was slightly modified by elm-watch.
 var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, debugMetadata, args)
 {
 	return _Platform_initialize(
+		impl._impl ? "Browser.application" : "Browser.document", // added by elm-watch
+		debugMetadata, // added by elm-watch
 		flagDecoder,
 		args,
 		impl.init,
-		impl.update,
-		impl.subscriptions,
+		// impl.update, // commented out by elm-watch
+		// impl.subscriptions, // commented out by elm-watch
+		impl, // added by elm-watch
 		function(sendToApp, initialModel) {
 			var divertHrefToApp = impl.setup && impl.setup(sendToApp)
-			var view = impl.view;
+			// var view = impl.view; // commented out by elm-watch
 			var title = _VirtualDom_doc.title;
 			var bodyNode = _VirtualDom_doc.body;
 			var currNode = _VirtualDom_virtualize(bodyNode);
 			return _Browser_makeAnimator(initialModel, function(model)
 			{
 				_VirtualDom_divertHrefToApp = divertHrefToApp;
-				var doc = view(model);
+				// var doc = view(model); // commented out by elm-watch
+				var doc = impl.view(model); // added by elm-watch
 				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.body);
 				var patches = _VirtualDom_diff(currNode, nextNode);
 				bodyNode = _VirtualDom_applyPatches(bodyNode, currNode, patches, sendToApp);
@@ -4051,11 +6127,13 @@ function _Browser_makeAnimator(model, draw)
 // APPLICATION
 
 
+// This function was slightly modified by elm-watch.
 function _Browser_application(impl)
 {
-	var onUrlChange = impl.onUrlChange;
-	var onUrlRequest = impl.onUrlRequest;
-	var key = function() { key.a(onUrlChange(_Browser_getUrl())); };
+	// var onUrlChange = impl.onUrlChange; // commented out by elm-watch
+	// var onUrlRequest = impl.onUrlRequest; // commented out by elm-watch
+	// var key = function() { key.a(onUrlChange(_Browser_getUrl())); }; // commented out by elm-watch
+	var key = function() { key.a(impl.onUrlChange(_Browser_getUrl())); }; // added by elm-watch
 
 	return _Browser_document({
 		setup: function(sendToApp)
@@ -4072,7 +6150,7 @@ function _Browser_application(impl)
 					var href = domNode.href;
 					var curr = _Browser_getUrl();
 					var next = $elm$url$Url$fromString(href).a;
-					sendToApp(onUrlRequest(
+					sendToApp(impl.onUrlRequest(
 						(next
 							&& curr.protocol === next.protocol
 							&& curr.host === next.host
@@ -4086,11 +6164,14 @@ function _Browser_application(impl)
 		},
 		init: function(flags)
 		{
-			return A3(impl.init, flags, _Browser_getUrl(), key);
+			// return A3(impl.init, flags, _Browser_getUrl(), key); // commented out by elm-watch
+			return A3(impl.init, flags, window.__ELM_WATCH_INIT_URL, key); // added by elm-watch
 		},
-		view: impl.view,
-		update: impl.update,
-		subscriptions: impl.subscriptions
+		// view: impl.view, // commented out by elm-watch
+		// update: impl.update, // commented out by elm-watch
+		// subscriptions: impl.subscriptions // commented out by elm-watch
+		view: function(model) { return impl.view(model); }, // added by elm-watch
+		_impl: impl // added by elm-watch
 	});
 }
 
@@ -4370,8 +6451,182 @@ function _Browser_load(url)
 		}
 	}));
 }
-var $author$project$Main$initialModel = {count: 0};
-var $elm$core$Basics$EQ = {$: 'EQ'};
+
+
+
+// SEND REQUEST
+
+var _Http_toTask = F3(function(router, toTask, request)
+{
+	return _Scheduler_binding(function(callback)
+	{
+		function done(response) {
+			callback(toTask(request.expect.a(response)));
+		}
+
+		var xhr = new XMLHttpRequest();
+		xhr.addEventListener('error', function() { done($elm$http$Http$NetworkError_); });
+		xhr.addEventListener('timeout', function() { done($elm$http$Http$Timeout_); });
+		xhr.addEventListener('load', function() { done(_Http_toResponse(request.expect.b, xhr)); });
+		$elm$core$Maybe$isJust(request.tracker) && _Http_track(router, xhr, request.tracker.a);
+
+		try {
+			xhr.open(request.method, request.url, true);
+		} catch (e) {
+			return done($elm$http$Http$BadUrl_(request.url));
+		}
+
+		_Http_configureRequest(xhr, request);
+
+		request.body.a && xhr.setRequestHeader('Content-Type', request.body.a);
+		xhr.send(request.body.b);
+
+		return function() { xhr.c = true; xhr.abort(); };
+	});
+});
+
+
+// CONFIGURE
+
+function _Http_configureRequest(xhr, request)
+{
+	for (var headers = request.headers; headers.b; headers = headers.b) // WHILE_CONS
+	{
+		xhr.setRequestHeader(headers.a.a, headers.a.b);
+	}
+	xhr.timeout = request.timeout.a || 0;
+	xhr.responseType = request.expect.d;
+	xhr.withCredentials = request.allowCookiesFromOtherDomains;
+}
+
+
+// RESPONSES
+
+function _Http_toResponse(toBody, xhr)
+{
+	return A2(
+		200 <= xhr.status && xhr.status < 300 ? $elm$http$Http$GoodStatus_ : $elm$http$Http$BadStatus_,
+		_Http_toMetadata(xhr),
+		toBody(xhr.response)
+	);
+}
+
+
+// METADATA
+
+function _Http_toMetadata(xhr)
+{
+	return {
+		url: xhr.responseURL,
+		statusCode: xhr.status,
+		statusText: xhr.statusText,
+		headers: _Http_parseHeaders(xhr.getAllResponseHeaders())
+	};
+}
+
+
+// HEADERS
+
+function _Http_parseHeaders(rawHeaders)
+{
+	if (!rawHeaders)
+	{
+		return $elm$core$Dict$empty;
+	}
+
+	var headers = $elm$core$Dict$empty;
+	var headerPairs = rawHeaders.split('\r\n');
+	for (var i = headerPairs.length; i--; )
+	{
+		var headerPair = headerPairs[i];
+		var index = headerPair.indexOf(': ');
+		if (index > 0)
+		{
+			var key = headerPair.substring(0, index);
+			var value = headerPair.substring(index + 2);
+
+			headers = A3($elm$core$Dict$update, key, function(oldValue) {
+				return $elm$core$Maybe$Just($elm$core$Maybe$isJust(oldValue)
+					? value + ', ' + oldValue.a
+					: value
+				);
+			}, headers);
+		}
+	}
+	return headers;
+}
+
+
+// EXPECT
+
+var _Http_expect = F3(function(type, toBody, toValue)
+{
+	return {
+		$: 0,
+		d: type,
+		b: toBody,
+		a: toValue
+	};
+});
+
+var _Http_mapExpect = F2(function(func, expect)
+{
+	return {
+		$: 0,
+		d: expect.d,
+		b: expect.b,
+		a: function(x) { return func(expect.a(x)); }
+	};
+});
+
+function _Http_toDataView(arrayBuffer)
+{
+	return new DataView(arrayBuffer);
+}
+
+
+// BODY and PARTS
+
+var _Http_emptyBody = { $: 0 };
+var _Http_pair = F2(function(a, b) { return { $: 0, a: a, b: b }; });
+
+function _Http_toFormData(parts)
+{
+	for (var formData = new FormData(); parts.b; parts = parts.b) // WHILE_CONS
+	{
+		var part = parts.a;
+		formData.append(part.a, part.b);
+	}
+	return formData;
+}
+
+var _Http_bytesToBlob = F2(function(mime, bytes)
+{
+	return new Blob([bytes], { type: mime });
+});
+
+
+// PROGRESS
+
+function _Http_track(router, xhr, tracker)
+{
+	// TODO check out lengthComputable on loadstart event
+
+	xhr.upload.addEventListener('progress', function(event) {
+		if (xhr.c) { return; }
+		_Scheduler_rawSpawn(A2($elm$core$Platform$sendToSelf, router, _Utils_Tuple2(tracker, $elm$http$Http$Sending({
+			sent: event.loaded,
+			size: event.total
+		}))));
+	});
+	xhr.addEventListener('progress', function(event) {
+		if (xhr.c) { return; }
+		_Scheduler_rawSpawn(A2($elm$core$Platform$sendToSelf, router, _Utils_Tuple2(tracker, $elm$http$Http$Receiving({
+			received: event.loaded,
+			size: event.lengthComputable ? $elm$core$Maybe$Just(event.total) : $elm$core$Maybe$Nothing
+		}))));
+	});
+}var $elm$core$Basics$EQ = {$: 'EQ'};
 var $elm$core$Basics$GT = {$: 'GT'};
 var $elm$core$Basics$LT = {$: 'LT'};
 var $elm$core$List$cons = _List_cons;
@@ -5159,44 +7414,976 @@ var $elm$core$Task$perform = F2(
 			$elm$core$Task$Perform(
 				A2($elm$core$Task$map, toMessage, task)));
 	});
+var $elm$browser$Browser$element = _Browser_element;
+var $krisajenkins$remotedata$RemoteData$NotAsked = {$: 'NotAsked'};
 var $elm$core$Platform$Cmd$batch = _Platform_batch;
 var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
+var $author$project$Main$initialModel = function (_v0) {
+	return _Utils_Tuple2(
+		{postCode: '', postCodeInfo: $krisajenkins$remotedata$RemoteData$NotAsked, postCodeNearby: $krisajenkins$remotedata$RemoteData$NotAsked},
+		$elm$core$Platform$Cmd$none);
+};
 var $elm$core$Platform$Sub$batch = _Platform_batch;
 var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
-var $elm$browser$Browser$sandbox = function (impl) {
-	return _Browser_element(
+var $author$project$Main$subscriptions = function (_v0) {
+	return $elm$core$Platform$Sub$none;
+};
+var $krisajenkins$remotedata$RemoteData$Loading = {$: 'Loading'};
+var $author$project$Main$GotPostcode = function (a) {
+	return {$: 'GotPostcode', a: a};
+};
+var $elm$core$Basics$composeR = F3(
+	function (f, g, x) {
+		return g(
+			f(x));
+	});
+var $elm$json$Json$Decode$decodeString = _Json_runOnString;
+var $elm$http$Http$BadStatus_ = F2(
+	function (a, b) {
+		return {$: 'BadStatus_', a: a, b: b};
+	});
+var $elm$http$Http$BadUrl_ = function (a) {
+	return {$: 'BadUrl_', a: a};
+};
+var $elm$http$Http$GoodStatus_ = F2(
+	function (a, b) {
+		return {$: 'GoodStatus_', a: a, b: b};
+	});
+var $elm$http$Http$NetworkError_ = {$: 'NetworkError_'};
+var $elm$http$Http$Receiving = function (a) {
+	return {$: 'Receiving', a: a};
+};
+var $elm$http$Http$Sending = function (a) {
+	return {$: 'Sending', a: a};
+};
+var $elm$http$Http$Timeout_ = {$: 'Timeout_'};
+var $elm$core$Dict$RBEmpty_elm_builtin = {$: 'RBEmpty_elm_builtin'};
+var $elm$core$Dict$empty = $elm$core$Dict$RBEmpty_elm_builtin;
+var $elm$core$Maybe$isJust = function (maybe) {
+	if (maybe.$ === 'Just') {
+		return true;
+	} else {
+		return false;
+	}
+};
+var $elm$core$Platform$sendToSelf = _Platform_sendToSelf;
+var $elm$core$Basics$compare = _Utils_compare;
+var $elm$core$Dict$get = F2(
+	function (targetKey, dict) {
+		get:
+		while (true) {
+			if (dict.$ === 'RBEmpty_elm_builtin') {
+				return $elm$core$Maybe$Nothing;
+			} else {
+				var key = dict.b;
+				var value = dict.c;
+				var left = dict.d;
+				var right = dict.e;
+				var _v1 = A2($elm$core$Basics$compare, targetKey, key);
+				switch (_v1.$) {
+					case 'LT':
+						var $temp$targetKey = targetKey,
+							$temp$dict = left;
+						targetKey = $temp$targetKey;
+						dict = $temp$dict;
+						continue get;
+					case 'EQ':
+						return $elm$core$Maybe$Just(value);
+					default:
+						var $temp$targetKey = targetKey,
+							$temp$dict = right;
+						targetKey = $temp$targetKey;
+						dict = $temp$dict;
+						continue get;
+				}
+			}
+		}
+	});
+var $elm$core$Dict$Black = {$: 'Black'};
+var $elm$core$Dict$RBNode_elm_builtin = F5(
+	function (a, b, c, d, e) {
+		return {$: 'RBNode_elm_builtin', a: a, b: b, c: c, d: d, e: e};
+	});
+var $elm$core$Dict$Red = {$: 'Red'};
+var $elm$core$Dict$balance = F5(
+	function (color, key, value, left, right) {
+		if ((right.$ === 'RBNode_elm_builtin') && (right.a.$ === 'Red')) {
+			var _v1 = right.a;
+			var rK = right.b;
+			var rV = right.c;
+			var rLeft = right.d;
+			var rRight = right.e;
+			if ((left.$ === 'RBNode_elm_builtin') && (left.a.$ === 'Red')) {
+				var _v3 = left.a;
+				var lK = left.b;
+				var lV = left.c;
+				var lLeft = left.d;
+				var lRight = left.e;
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					$elm$core$Dict$Red,
+					key,
+					value,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, lK, lV, lLeft, lRight),
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, rK, rV, rLeft, rRight));
+			} else {
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					color,
+					rK,
+					rV,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, key, value, left, rLeft),
+					rRight);
+			}
+		} else {
+			if ((((left.$ === 'RBNode_elm_builtin') && (left.a.$ === 'Red')) && (left.d.$ === 'RBNode_elm_builtin')) && (left.d.a.$ === 'Red')) {
+				var _v5 = left.a;
+				var lK = left.b;
+				var lV = left.c;
+				var _v6 = left.d;
+				var _v7 = _v6.a;
+				var llK = _v6.b;
+				var llV = _v6.c;
+				var llLeft = _v6.d;
+				var llRight = _v6.e;
+				var lRight = left.e;
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					$elm$core$Dict$Red,
+					lK,
+					lV,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, llK, llV, llLeft, llRight),
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, key, value, lRight, right));
+			} else {
+				return A5($elm$core$Dict$RBNode_elm_builtin, color, key, value, left, right);
+			}
+		}
+	});
+var $elm$core$Dict$insertHelp = F3(
+	function (key, value, dict) {
+		if (dict.$ === 'RBEmpty_elm_builtin') {
+			return A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, key, value, $elm$core$Dict$RBEmpty_elm_builtin, $elm$core$Dict$RBEmpty_elm_builtin);
+		} else {
+			var nColor = dict.a;
+			var nKey = dict.b;
+			var nValue = dict.c;
+			var nLeft = dict.d;
+			var nRight = dict.e;
+			var _v1 = A2($elm$core$Basics$compare, key, nKey);
+			switch (_v1.$) {
+				case 'LT':
+					return A5(
+						$elm$core$Dict$balance,
+						nColor,
+						nKey,
+						nValue,
+						A3($elm$core$Dict$insertHelp, key, value, nLeft),
+						nRight);
+				case 'EQ':
+					return A5($elm$core$Dict$RBNode_elm_builtin, nColor, nKey, value, nLeft, nRight);
+				default:
+					return A5(
+						$elm$core$Dict$balance,
+						nColor,
+						nKey,
+						nValue,
+						nLeft,
+						A3($elm$core$Dict$insertHelp, key, value, nRight));
+			}
+		}
+	});
+var $elm$core$Dict$insert = F3(
+	function (key, value, dict) {
+		var _v0 = A3($elm$core$Dict$insertHelp, key, value, dict);
+		if ((_v0.$ === 'RBNode_elm_builtin') && (_v0.a.$ === 'Red')) {
+			var _v1 = _v0.a;
+			var k = _v0.b;
+			var v = _v0.c;
+			var l = _v0.d;
+			var r = _v0.e;
+			return A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, k, v, l, r);
+		} else {
+			var x = _v0;
+			return x;
+		}
+	});
+var $elm$core$Dict$getMin = function (dict) {
+	getMin:
+	while (true) {
+		if ((dict.$ === 'RBNode_elm_builtin') && (dict.d.$ === 'RBNode_elm_builtin')) {
+			var left = dict.d;
+			var $temp$dict = left;
+			dict = $temp$dict;
+			continue getMin;
+		} else {
+			return dict;
+		}
+	}
+};
+var $elm$core$Dict$moveRedLeft = function (dict) {
+	if (((dict.$ === 'RBNode_elm_builtin') && (dict.d.$ === 'RBNode_elm_builtin')) && (dict.e.$ === 'RBNode_elm_builtin')) {
+		if ((dict.e.d.$ === 'RBNode_elm_builtin') && (dict.e.d.a.$ === 'Red')) {
+			var clr = dict.a;
+			var k = dict.b;
+			var v = dict.c;
+			var _v1 = dict.d;
+			var lClr = _v1.a;
+			var lK = _v1.b;
+			var lV = _v1.c;
+			var lLeft = _v1.d;
+			var lRight = _v1.e;
+			var _v2 = dict.e;
+			var rClr = _v2.a;
+			var rK = _v2.b;
+			var rV = _v2.c;
+			var rLeft = _v2.d;
+			var _v3 = rLeft.a;
+			var rlK = rLeft.b;
+			var rlV = rLeft.c;
+			var rlL = rLeft.d;
+			var rlR = rLeft.e;
+			var rRight = _v2.e;
+			return A5(
+				$elm$core$Dict$RBNode_elm_builtin,
+				$elm$core$Dict$Red,
+				rlK,
+				rlV,
+				A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					$elm$core$Dict$Black,
+					k,
+					v,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, lK, lV, lLeft, lRight),
+					rlL),
+				A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, rK, rV, rlR, rRight));
+		} else {
+			var clr = dict.a;
+			var k = dict.b;
+			var v = dict.c;
+			var _v4 = dict.d;
+			var lClr = _v4.a;
+			var lK = _v4.b;
+			var lV = _v4.c;
+			var lLeft = _v4.d;
+			var lRight = _v4.e;
+			var _v5 = dict.e;
+			var rClr = _v5.a;
+			var rK = _v5.b;
+			var rV = _v5.c;
+			var rLeft = _v5.d;
+			var rRight = _v5.e;
+			if (clr.$ === 'Black') {
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					$elm$core$Dict$Black,
+					k,
+					v,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, lK, lV, lLeft, lRight),
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, rK, rV, rLeft, rRight));
+			} else {
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					$elm$core$Dict$Black,
+					k,
+					v,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, lK, lV, lLeft, lRight),
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, rK, rV, rLeft, rRight));
+			}
+		}
+	} else {
+		return dict;
+	}
+};
+var $elm$core$Dict$moveRedRight = function (dict) {
+	if (((dict.$ === 'RBNode_elm_builtin') && (dict.d.$ === 'RBNode_elm_builtin')) && (dict.e.$ === 'RBNode_elm_builtin')) {
+		if ((dict.d.d.$ === 'RBNode_elm_builtin') && (dict.d.d.a.$ === 'Red')) {
+			var clr = dict.a;
+			var k = dict.b;
+			var v = dict.c;
+			var _v1 = dict.d;
+			var lClr = _v1.a;
+			var lK = _v1.b;
+			var lV = _v1.c;
+			var _v2 = _v1.d;
+			var _v3 = _v2.a;
+			var llK = _v2.b;
+			var llV = _v2.c;
+			var llLeft = _v2.d;
+			var llRight = _v2.e;
+			var lRight = _v1.e;
+			var _v4 = dict.e;
+			var rClr = _v4.a;
+			var rK = _v4.b;
+			var rV = _v4.c;
+			var rLeft = _v4.d;
+			var rRight = _v4.e;
+			return A5(
+				$elm$core$Dict$RBNode_elm_builtin,
+				$elm$core$Dict$Red,
+				lK,
+				lV,
+				A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, llK, llV, llLeft, llRight),
+				A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					$elm$core$Dict$Black,
+					k,
+					v,
+					lRight,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, rK, rV, rLeft, rRight)));
+		} else {
+			var clr = dict.a;
+			var k = dict.b;
+			var v = dict.c;
+			var _v5 = dict.d;
+			var lClr = _v5.a;
+			var lK = _v5.b;
+			var lV = _v5.c;
+			var lLeft = _v5.d;
+			var lRight = _v5.e;
+			var _v6 = dict.e;
+			var rClr = _v6.a;
+			var rK = _v6.b;
+			var rV = _v6.c;
+			var rLeft = _v6.d;
+			var rRight = _v6.e;
+			if (clr.$ === 'Black') {
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					$elm$core$Dict$Black,
+					k,
+					v,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, lK, lV, lLeft, lRight),
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, rK, rV, rLeft, rRight));
+			} else {
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					$elm$core$Dict$Black,
+					k,
+					v,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, lK, lV, lLeft, lRight),
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, rK, rV, rLeft, rRight));
+			}
+		}
+	} else {
+		return dict;
+	}
+};
+var $elm$core$Dict$removeHelpPrepEQGT = F7(
+	function (targetKey, dict, color, key, value, left, right) {
+		if ((left.$ === 'RBNode_elm_builtin') && (left.a.$ === 'Red')) {
+			var _v1 = left.a;
+			var lK = left.b;
+			var lV = left.c;
+			var lLeft = left.d;
+			var lRight = left.e;
+			return A5(
+				$elm$core$Dict$RBNode_elm_builtin,
+				color,
+				lK,
+				lV,
+				lLeft,
+				A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, key, value, lRight, right));
+		} else {
+			_v2$2:
+			while (true) {
+				if ((right.$ === 'RBNode_elm_builtin') && (right.a.$ === 'Black')) {
+					if (right.d.$ === 'RBNode_elm_builtin') {
+						if (right.d.a.$ === 'Black') {
+							var _v3 = right.a;
+							var _v4 = right.d;
+							var _v5 = _v4.a;
+							return $elm$core$Dict$moveRedRight(dict);
+						} else {
+							break _v2$2;
+						}
+					} else {
+						var _v6 = right.a;
+						var _v7 = right.d;
+						return $elm$core$Dict$moveRedRight(dict);
+					}
+				} else {
+					break _v2$2;
+				}
+			}
+			return dict;
+		}
+	});
+var $elm$core$Dict$removeMin = function (dict) {
+	if ((dict.$ === 'RBNode_elm_builtin') && (dict.d.$ === 'RBNode_elm_builtin')) {
+		var color = dict.a;
+		var key = dict.b;
+		var value = dict.c;
+		var left = dict.d;
+		var lColor = left.a;
+		var lLeft = left.d;
+		var right = dict.e;
+		if (lColor.$ === 'Black') {
+			if ((lLeft.$ === 'RBNode_elm_builtin') && (lLeft.a.$ === 'Red')) {
+				var _v3 = lLeft.a;
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					color,
+					key,
+					value,
+					$elm$core$Dict$removeMin(left),
+					right);
+			} else {
+				var _v4 = $elm$core$Dict$moveRedLeft(dict);
+				if (_v4.$ === 'RBNode_elm_builtin') {
+					var nColor = _v4.a;
+					var nKey = _v4.b;
+					var nValue = _v4.c;
+					var nLeft = _v4.d;
+					var nRight = _v4.e;
+					return A5(
+						$elm$core$Dict$balance,
+						nColor,
+						nKey,
+						nValue,
+						$elm$core$Dict$removeMin(nLeft),
+						nRight);
+				} else {
+					return $elm$core$Dict$RBEmpty_elm_builtin;
+				}
+			}
+		} else {
+			return A5(
+				$elm$core$Dict$RBNode_elm_builtin,
+				color,
+				key,
+				value,
+				$elm$core$Dict$removeMin(left),
+				right);
+		}
+	} else {
+		return $elm$core$Dict$RBEmpty_elm_builtin;
+	}
+};
+var $elm$core$Dict$removeHelp = F2(
+	function (targetKey, dict) {
+		if (dict.$ === 'RBEmpty_elm_builtin') {
+			return $elm$core$Dict$RBEmpty_elm_builtin;
+		} else {
+			var color = dict.a;
+			var key = dict.b;
+			var value = dict.c;
+			var left = dict.d;
+			var right = dict.e;
+			if (_Utils_cmp(targetKey, key) < 0) {
+				if ((left.$ === 'RBNode_elm_builtin') && (left.a.$ === 'Black')) {
+					var _v4 = left.a;
+					var lLeft = left.d;
+					if ((lLeft.$ === 'RBNode_elm_builtin') && (lLeft.a.$ === 'Red')) {
+						var _v6 = lLeft.a;
+						return A5(
+							$elm$core$Dict$RBNode_elm_builtin,
+							color,
+							key,
+							value,
+							A2($elm$core$Dict$removeHelp, targetKey, left),
+							right);
+					} else {
+						var _v7 = $elm$core$Dict$moveRedLeft(dict);
+						if (_v7.$ === 'RBNode_elm_builtin') {
+							var nColor = _v7.a;
+							var nKey = _v7.b;
+							var nValue = _v7.c;
+							var nLeft = _v7.d;
+							var nRight = _v7.e;
+							return A5(
+								$elm$core$Dict$balance,
+								nColor,
+								nKey,
+								nValue,
+								A2($elm$core$Dict$removeHelp, targetKey, nLeft),
+								nRight);
+						} else {
+							return $elm$core$Dict$RBEmpty_elm_builtin;
+						}
+					}
+				} else {
+					return A5(
+						$elm$core$Dict$RBNode_elm_builtin,
+						color,
+						key,
+						value,
+						A2($elm$core$Dict$removeHelp, targetKey, left),
+						right);
+				}
+			} else {
+				return A2(
+					$elm$core$Dict$removeHelpEQGT,
+					targetKey,
+					A7($elm$core$Dict$removeHelpPrepEQGT, targetKey, dict, color, key, value, left, right));
+			}
+		}
+	});
+var $elm$core$Dict$removeHelpEQGT = F2(
+	function (targetKey, dict) {
+		if (dict.$ === 'RBNode_elm_builtin') {
+			var color = dict.a;
+			var key = dict.b;
+			var value = dict.c;
+			var left = dict.d;
+			var right = dict.e;
+			if (_Utils_eq(targetKey, key)) {
+				var _v1 = $elm$core$Dict$getMin(right);
+				if (_v1.$ === 'RBNode_elm_builtin') {
+					var minKey = _v1.b;
+					var minValue = _v1.c;
+					return A5(
+						$elm$core$Dict$balance,
+						color,
+						minKey,
+						minValue,
+						left,
+						$elm$core$Dict$removeMin(right));
+				} else {
+					return $elm$core$Dict$RBEmpty_elm_builtin;
+				}
+			} else {
+				return A5(
+					$elm$core$Dict$balance,
+					color,
+					key,
+					value,
+					left,
+					A2($elm$core$Dict$removeHelp, targetKey, right));
+			}
+		} else {
+			return $elm$core$Dict$RBEmpty_elm_builtin;
+		}
+	});
+var $elm$core$Dict$remove = F2(
+	function (key, dict) {
+		var _v0 = A2($elm$core$Dict$removeHelp, key, dict);
+		if ((_v0.$ === 'RBNode_elm_builtin') && (_v0.a.$ === 'Red')) {
+			var _v1 = _v0.a;
+			var k = _v0.b;
+			var v = _v0.c;
+			var l = _v0.d;
+			var r = _v0.e;
+			return A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, k, v, l, r);
+		} else {
+			var x = _v0;
+			return x;
+		}
+	});
+var $elm$core$Dict$update = F3(
+	function (targetKey, alter, dictionary) {
+		var _v0 = alter(
+			A2($elm$core$Dict$get, targetKey, dictionary));
+		if (_v0.$ === 'Just') {
+			var value = _v0.a;
+			return A3($elm$core$Dict$insert, targetKey, value, dictionary);
+		} else {
+			return A2($elm$core$Dict$remove, targetKey, dictionary);
+		}
+	});
+var $elm$http$Http$expectStringResponse = F2(
+	function (toMsg, toResult) {
+		return A3(
+			_Http_expect,
+			'',
+			$elm$core$Basics$identity,
+			A2($elm$core$Basics$composeR, toResult, toMsg));
+	});
+var $elm$core$Result$mapError = F2(
+	function (f, result) {
+		if (result.$ === 'Ok') {
+			var v = result.a;
+			return $elm$core$Result$Ok(v);
+		} else {
+			var e = result.a;
+			return $elm$core$Result$Err(
+				f(e));
+		}
+	});
+var $elm$http$Http$BadBody = function (a) {
+	return {$: 'BadBody', a: a};
+};
+var $elm$http$Http$BadStatus = function (a) {
+	return {$: 'BadStatus', a: a};
+};
+var $elm$http$Http$BadUrl = function (a) {
+	return {$: 'BadUrl', a: a};
+};
+var $elm$http$Http$NetworkError = {$: 'NetworkError'};
+var $elm$http$Http$Timeout = {$: 'Timeout'};
+var $elm$http$Http$resolve = F2(
+	function (toResult, response) {
+		switch (response.$) {
+			case 'BadUrl_':
+				var url = response.a;
+				return $elm$core$Result$Err(
+					$elm$http$Http$BadUrl(url));
+			case 'Timeout_':
+				return $elm$core$Result$Err($elm$http$Http$Timeout);
+			case 'NetworkError_':
+				return $elm$core$Result$Err($elm$http$Http$NetworkError);
+			case 'BadStatus_':
+				var metadata = response.a;
+				return $elm$core$Result$Err(
+					$elm$http$Http$BadStatus(metadata.statusCode));
+			default:
+				var body = response.b;
+				return A2(
+					$elm$core$Result$mapError,
+					$elm$http$Http$BadBody,
+					toResult(body));
+		}
+	});
+var $elm$http$Http$expectJson = F2(
+	function (toMsg, decoder) {
+		return A2(
+			$elm$http$Http$expectStringResponse,
+			toMsg,
+			$elm$http$Http$resolve(
+				function (string) {
+					return A2(
+						$elm$core$Result$mapError,
+						$elm$json$Json$Decode$errorToString,
+						A2($elm$json$Json$Decode$decodeString, decoder, string));
+				}));
+	});
+var $krisajenkins$remotedata$RemoteData$Failure = function (a) {
+	return {$: 'Failure', a: a};
+};
+var $krisajenkins$remotedata$RemoteData$Success = function (a) {
+	return {$: 'Success', a: a};
+};
+var $krisajenkins$remotedata$RemoteData$fromResult = function (result) {
+	if (result.$ === 'Err') {
+		var e = result.a;
+		return $krisajenkins$remotedata$RemoteData$Failure(e);
+	} else {
+		var x = result.a;
+		return $krisajenkins$remotedata$RemoteData$Success(x);
+	}
+};
+var $elm$http$Http$emptyBody = _Http_emptyBody;
+var $elm$http$Http$Request = function (a) {
+	return {$: 'Request', a: a};
+};
+var $elm$http$Http$State = F2(
+	function (reqs, subs) {
+		return {reqs: reqs, subs: subs};
+	});
+var $elm$http$Http$init = $elm$core$Task$succeed(
+	A2($elm$http$Http$State, $elm$core$Dict$empty, _List_Nil));
+var $elm$core$Process$kill = _Scheduler_kill;
+var $elm$core$Process$spawn = _Scheduler_spawn;
+var $elm$http$Http$updateReqs = F3(
+	function (router, cmds, reqs) {
+		updateReqs:
+		while (true) {
+			if (!cmds.b) {
+				return $elm$core$Task$succeed(reqs);
+			} else {
+				var cmd = cmds.a;
+				var otherCmds = cmds.b;
+				if (cmd.$ === 'Cancel') {
+					var tracker = cmd.a;
+					var _v2 = A2($elm$core$Dict$get, tracker, reqs);
+					if (_v2.$ === 'Nothing') {
+						var $temp$router = router,
+							$temp$cmds = otherCmds,
+							$temp$reqs = reqs;
+						router = $temp$router;
+						cmds = $temp$cmds;
+						reqs = $temp$reqs;
+						continue updateReqs;
+					} else {
+						var pid = _v2.a;
+						return A2(
+							$elm$core$Task$andThen,
+							function (_v3) {
+								return A3(
+									$elm$http$Http$updateReqs,
+									router,
+									otherCmds,
+									A2($elm$core$Dict$remove, tracker, reqs));
+							},
+							$elm$core$Process$kill(pid));
+					}
+				} else {
+					var req = cmd.a;
+					return A2(
+						$elm$core$Task$andThen,
+						function (pid) {
+							var _v4 = req.tracker;
+							if (_v4.$ === 'Nothing') {
+								return A3($elm$http$Http$updateReqs, router, otherCmds, reqs);
+							} else {
+								var tracker = _v4.a;
+								return A3(
+									$elm$http$Http$updateReqs,
+									router,
+									otherCmds,
+									A3($elm$core$Dict$insert, tracker, pid, reqs));
+							}
+						},
+						$elm$core$Process$spawn(
+							A3(
+								_Http_toTask,
+								router,
+								$elm$core$Platform$sendToApp(router),
+								req)));
+				}
+			}
+		}
+	});
+var $elm$http$Http$onEffects = F4(
+	function (router, cmds, subs, state) {
+		return A2(
+			$elm$core$Task$andThen,
+			function (reqs) {
+				return $elm$core$Task$succeed(
+					A2($elm$http$Http$State, reqs, subs));
+			},
+			A3($elm$http$Http$updateReqs, router, cmds, state.reqs));
+	});
+var $elm$core$List$maybeCons = F3(
+	function (f, mx, xs) {
+		var _v0 = f(mx);
+		if (_v0.$ === 'Just') {
+			var x = _v0.a;
+			return A2($elm$core$List$cons, x, xs);
+		} else {
+			return xs;
+		}
+	});
+var $elm$core$List$filterMap = F2(
+	function (f, xs) {
+		return A3(
+			$elm$core$List$foldr,
+			$elm$core$List$maybeCons(f),
+			_List_Nil,
+			xs);
+	});
+var $elm$http$Http$maybeSend = F4(
+	function (router, desiredTracker, progress, _v0) {
+		var actualTracker = _v0.a;
+		var toMsg = _v0.b;
+		return _Utils_eq(desiredTracker, actualTracker) ? $elm$core$Maybe$Just(
+			A2(
+				$elm$core$Platform$sendToApp,
+				router,
+				toMsg(progress))) : $elm$core$Maybe$Nothing;
+	});
+var $elm$http$Http$onSelfMsg = F3(
+	function (router, _v0, state) {
+		var tracker = _v0.a;
+		var progress = _v0.b;
+		return A2(
+			$elm$core$Task$andThen,
+			function (_v1) {
+				return $elm$core$Task$succeed(state);
+			},
+			$elm$core$Task$sequence(
+				A2(
+					$elm$core$List$filterMap,
+					A3($elm$http$Http$maybeSend, router, tracker, progress),
+					state.subs)));
+	});
+var $elm$http$Http$Cancel = function (a) {
+	return {$: 'Cancel', a: a};
+};
+var $elm$http$Http$cmdMap = F2(
+	function (func, cmd) {
+		if (cmd.$ === 'Cancel') {
+			var tracker = cmd.a;
+			return $elm$http$Http$Cancel(tracker);
+		} else {
+			var r = cmd.a;
+			return $elm$http$Http$Request(
+				{
+					allowCookiesFromOtherDomains: r.allowCookiesFromOtherDomains,
+					body: r.body,
+					expect: A2(_Http_mapExpect, func, r.expect),
+					headers: r.headers,
+					method: r.method,
+					timeout: r.timeout,
+					tracker: r.tracker,
+					url: r.url
+				});
+		}
+	});
+var $elm$http$Http$MySub = F2(
+	function (a, b) {
+		return {$: 'MySub', a: a, b: b};
+	});
+var $elm$http$Http$subMap = F2(
+	function (func, _v0) {
+		var tracker = _v0.a;
+		var toMsg = _v0.b;
+		return A2(
+			$elm$http$Http$MySub,
+			tracker,
+			A2($elm$core$Basics$composeR, toMsg, func));
+	});
+_Platform_effectManagers['Http'] = _Platform_createManager($elm$http$Http$init, $elm$http$Http$onEffects, $elm$http$Http$onSelfMsg, $elm$http$Http$cmdMap, $elm$http$Http$subMap);
+var $elm$http$Http$command = _Platform_leaf('Http');
+var $elm$http$Http$subscription = _Platform_leaf('Http');
+var $elm$http$Http$request = function (r) {
+	return $elm$http$Http$command(
+		$elm$http$Http$Request(
+			{allowCookiesFromOtherDomains: false, body: r.body, expect: r.expect, headers: r.headers, method: r.method, timeout: r.timeout, tracker: r.tracker, url: r.url}));
+};
+var $elm$http$Http$get = function (r) {
+	return $elm$http$Http$request(
+		{body: $elm$http$Http$emptyBody, expect: r.expect, headers: _List_Nil, method: 'GET', timeout: $elm$core$Maybe$Nothing, tracker: $elm$core$Maybe$Nothing, url: r.url});
+};
+var $author$project$Main$postcodeApiUrl = 'https://api.postcodes.io/postcodes/';
+var $elm$json$Json$Decode$field = _Json_decodeField;
+var $author$project$Main$PostcodeDetails = F3(
+	function (postcode, country, region) {
+		return {country: country, postcode: postcode, region: region};
+	});
+var $NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$custom = $elm$json$Json$Decode$map2($elm$core$Basics$apR);
+var $NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required = F3(
+	function (key, valDecoder, decoder) {
+		return A2(
+			$NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$custom,
+			A2($elm$json$Json$Decode$field, key, valDecoder),
+			decoder);
+	});
+var $elm$json$Json$Decode$string = _Json_decodeString;
+var $author$project$Main$postcodeDecoder = A3(
+	$NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
+	'region',
+	$elm$json$Json$Decode$string,
+	A3(
+		$NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
+		'country',
+		$elm$json$Json$Decode$string,
+		A3(
+			$NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
+			'postcode',
+			$elm$json$Json$Decode$string,
+			$elm$json$Json$Decode$succeed($author$project$Main$PostcodeDetails))));
+var $author$project$Main$postcodeResultDecoder = A2($elm$json$Json$Decode$field, 'result', $author$project$Main$postcodeDecoder);
+var $author$project$Main$getPostcodeInfo = function (code) {
+	return $elm$http$Http$get(
 		{
-			init: function (_v0) {
-				return _Utils_Tuple2(impl.init, $elm$core$Platform$Cmd$none);
-			},
-			subscriptions: function (_v1) {
-				return $elm$core$Platform$Sub$none;
-			},
-			update: F2(
-				function (msg, model) {
-					return _Utils_Tuple2(
-						A2(impl.update, msg, model),
-						$elm$core$Platform$Cmd$none);
-				}),
-			view: impl.view
+			expect: A2(
+				$elm$http$Http$expectJson,
+				A2($elm$core$Basics$composeR, $krisajenkins$remotedata$RemoteData$fromResult, $author$project$Main$GotPostcode),
+				$author$project$Main$postcodeResultDecoder),
+			url: _Utils_ap($author$project$Main$postcodeApiUrl, code)
+		});
+};
+var $author$project$Main$GotPostcodeNearby = function (a) {
+	return {$: 'GotPostcodeNearby', a: a};
+};
+var $elm$json$Json$Decode$list = _Json_decodeList;
+var $author$project$Main$postcodeNearbyDecoder = A2(
+	$elm$json$Json$Decode$field,
+	'result',
+	$elm$json$Json$Decode$list($author$project$Main$postcodeDecoder));
+var $author$project$Main$getPostcodeNearby = function (code) {
+	return $elm$http$Http$get(
+		{
+			expect: A2(
+				$elm$http$Http$expectJson,
+				A2($elm$core$Basics$composeR, $krisajenkins$remotedata$RemoteData$fromResult, $author$project$Main$GotPostcodeNearby),
+				$author$project$Main$postcodeNearbyDecoder),
+			url: $author$project$Main$postcodeApiUrl + (code + '/nearest')
 		});
 };
 var $author$project$Main$update = F2(
 	function (msg, model) {
-		if (msg.$ === 'Increment') {
-			return _Utils_update(
-				model,
-				{count: model.count + 1});
-		} else {
-			return _Utils_update(
-				model,
-				{count: model.count - 1});
+		switch (msg.$) {
+			case 'OnChange':
+				var code = msg.a;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{postCode: code}),
+					$elm$core$Platform$Cmd$none);
+			case 'Submit':
+				var code = msg.a;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{postCodeInfo: $krisajenkins$remotedata$RemoteData$Loading, postCodeNearby: $krisajenkins$remotedata$RemoteData$Loading}),
+					$elm$core$Platform$Cmd$batch(
+						_List_fromArray(
+							[
+								$author$project$Main$getPostcodeInfo(code),
+								$author$project$Main$getPostcodeNearby(code)
+							])));
+			case 'OnKeyDown':
+				var key = msg.a;
+				return (key === 13) ? _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{postCodeInfo: $krisajenkins$remotedata$RemoteData$Loading}),
+					$elm$core$Platform$Cmd$batch(
+						_List_fromArray(
+							[
+								$author$project$Main$getPostcodeInfo(model.postCode),
+								$author$project$Main$getPostcodeNearby(model.postCode)
+							]))) : _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
+			case 'GotPostcode':
+				var response = msg.a;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{postCodeInfo: response}),
+					$elm$core$Platform$Cmd$none);
+			default:
+				var response = msg.a;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{postCodeNearby: response}),
+					$elm$core$Platform$Cmd$none);
 		}
 	});
-var $author$project$Main$Decrement = {$: 'Decrement'};
-var $author$project$Main$Increment = {$: 'Increment'};
+var $author$project$Main$OnChange = function (a) {
+	return {$: 'OnChange', a: a};
+};
+var $author$project$Main$OnKeyDown = function (a) {
+	return {$: 'OnKeyDown', a: a};
+};
+var $author$project$Main$Submit = function (a) {
+	return {$: 'Submit', a: a};
+};
+var $elm$core$List$append = F2(
+	function (xs, ys) {
+		if (!ys.b) {
+			return xs;
+		} else {
+			return A3($elm$core$List$foldr, $elm$core$List$cons, ys, xs);
+		}
+	});
 var $elm$html$Html$button = _VirtualDom_node('button');
 var $elm$html$Html$div = _VirtualDom_node('div');
+var $author$project$Main$errorToString = function (error) {
+	switch (error.$) {
+		case 'BadUrl':
+			var url = error.a;
+			return 'The URL ' + (url + ' was invalid');
+		case 'Timeout':
+			return 'Unable to reach the server, try again';
+		case 'NetworkError':
+			return 'Unable to reach the server, check your network connection';
+		case 'BadStatus':
+			switch (error.a) {
+				case 500:
+					return 'The server had a problem, try again later';
+				case 400:
+					return 'Verify your information and try again';
+				default:
+					return 'Unknown error';
+			}
+		default:
+			var errorMessage = error.a;
+			return errorMessage;
+	}
+};
+var $elm$html$Html$input = _VirtualDom_node('input');
 var $elm$virtual_dom$VirtualDom$Normal = function (a) {
 	return {$: 'Normal', a: a};
 };
@@ -5214,45 +8401,199 @@ var $elm$html$Html$Events$onClick = function (msg) {
 		'click',
 		$elm$json$Json$Decode$succeed(msg));
 };
+var $elm$html$Html$Events$alwaysStop = function (x) {
+	return _Utils_Tuple2(x, true);
+};
+var $elm$virtual_dom$VirtualDom$MayStopPropagation = function (a) {
+	return {$: 'MayStopPropagation', a: a};
+};
+var $elm$html$Html$Events$stopPropagationOn = F2(
+	function (event, decoder) {
+		return A2(
+			$elm$virtual_dom$VirtualDom$on,
+			event,
+			$elm$virtual_dom$VirtualDom$MayStopPropagation(decoder));
+	});
+var $elm$json$Json$Decode$at = F2(
+	function (fields, decoder) {
+		return A3($elm$core$List$foldr, $elm$json$Json$Decode$field, decoder, fields);
+	});
+var $elm$html$Html$Events$targetValue = A2(
+	$elm$json$Json$Decode$at,
+	_List_fromArray(
+		['target', 'value']),
+	$elm$json$Json$Decode$string);
+var $elm$html$Html$Events$onInput = function (tagger) {
+	return A2(
+		$elm$html$Html$Events$stopPropagationOn,
+		'input',
+		A2(
+			$elm$json$Json$Decode$map,
+			$elm$html$Html$Events$alwaysStop,
+			A2($elm$json$Json$Decode$map, tagger, $elm$html$Html$Events$targetValue)));
+};
+var $elm$json$Json$Decode$int = _Json_decodeInt;
+var $elm$html$Html$Events$keyCode = A2($elm$json$Json$Decode$field, 'keyCode', $elm$json$Json$Decode$int);
+var $author$project$Main$onKeyDown = function (tagger) {
+	return A2(
+		$elm$html$Html$Events$on,
+		'keydown',
+		A2($elm$json$Json$Decode$map, tagger, $elm$html$Html$Events$keyCode));
+};
+var $elm$json$Json$Encode$string = _Json_wrap;
+var $elm$html$Html$Attributes$stringProperty = F2(
+	function (key, string) {
+		return A2(
+			_VirtualDom_property,
+			key,
+			$elm$json$Json$Encode$string(string));
+	});
+var $elm$html$Html$Attributes$placeholder = $elm$html$Html$Attributes$stringProperty('placeholder');
 var $elm$virtual_dom$VirtualDom$text = _VirtualDom_text;
 var $elm$html$Html$text = $elm$virtual_dom$VirtualDom$text;
-var $author$project$Main$view = function (model) {
+var $author$project$Main$postcodeDetailsView = function (details) {
 	return A2(
 		$elm$html$Html$div,
 		_List_Nil,
 		_List_fromArray(
 			[
 				A2(
-				$elm$html$Html$button,
+				$elm$html$Html$div,
+				_List_Nil,
 				_List_fromArray(
 					[
-						$elm$html$Html$Events$onClick($author$project$Main$Increment)
-					]),
-				_List_fromArray(
-					[
-						$elm$html$Html$text('+1')
+						$elm$html$Html$text('Country: ' + details.country)
 					])),
 				A2(
 				$elm$html$Html$div,
 				_List_Nil,
 				_List_fromArray(
 					[
-						$elm$html$Html$text(
-						$elm$core$String$fromInt(model.count))
+						$elm$html$Html$text('Region: ' + details.region)
+					]))
+			]));
+};
+var $author$project$Main$postcodeNearbyView = function (details) {
+	return A2(
+		$elm$html$Html$div,
+		_List_Nil,
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$div,
+				_List_Nil,
+				_List_fromArray(
+					[
+						$elm$html$Html$text('Postcode: ' + details.postcode)
 					])),
+				A2(
+				$elm$html$Html$div,
+				_List_Nil,
+				_List_fromArray(
+					[
+						$elm$html$Html$text('Country: ' + details.country)
+					])),
+				A2(
+				$elm$html$Html$div,
+				_List_Nil,
+				_List_fromArray(
+					[
+						$elm$html$Html$text('Region: ' + details.region)
+					]))
+			]));
+};
+var $elm$html$Html$Attributes$value = $elm$html$Html$Attributes$stringProperty('value');
+var $author$project$Main$view = function (_v0) {
+	var postCode = _v0.postCode;
+	var postCodeInfo = _v0.postCodeInfo;
+	var postCodeNearby = _v0.postCodeNearby;
+	return A2(
+		$elm$html$Html$div,
+		_List_Nil,
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$input,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$placeholder('Postcode'),
+						$elm$html$Html$Attributes$value(postCode),
+						$elm$html$Html$Events$onInput($author$project$Main$OnChange),
+						$author$project$Main$onKeyDown($author$project$Main$OnKeyDown)
+					]),
+				_List_Nil),
 				A2(
 				$elm$html$Html$button,
 				_List_fromArray(
 					[
-						$elm$html$Html$Events$onClick($author$project$Main$Decrement)
+						$elm$html$Html$Events$onClick(
+						$author$project$Main$Submit(postCode))
 					]),
 				_List_fromArray(
 					[
-						$elm$html$Html$text('-1')
-					]))
+						$elm$html$Html$text('Submit')
+					])),
+				A2($elm$html$Html$div, _List_Nil, _List_Nil),
+				function () {
+				switch (postCodeInfo.$) {
+					case 'NotAsked':
+						return $elm$html$Html$text('Waiting for input');
+					case 'Loading':
+						return $elm$html$Html$text('Loading postcode info');
+					case 'Failure':
+						var err = postCodeInfo.a;
+						return $elm$html$Html$text(
+							'Error: ' + $author$project$Main$errorToString(err));
+					default:
+						var response = postCodeInfo.a;
+						return $author$project$Main$postcodeDetailsView(response);
+				}
+			}(),
+				function () {
+				switch (postCodeNearby.$) {
+					case 'NotAsked':
+						return A2(
+							$elm$html$Html$div,
+							_List_Nil,
+							_List_fromArray(
+								[
+									$elm$html$Html$text('Waiting for input')
+								]));
+					case 'Loading':
+						return A2(
+							$elm$html$Html$div,
+							_List_Nil,
+							_List_fromArray(
+								[
+									$elm$html$Html$text('Loading nearby postcodes')
+								]));
+					case 'Failure':
+						var err = postCodeNearby.a;
+						return A2(
+							$elm$html$Html$div,
+							_List_Nil,
+							_List_fromArray(
+								[
+									$elm$html$Html$text(
+									'Error: ' + $author$project$Main$errorToString(err))
+								]));
+					default:
+						var response = postCodeNearby.a;
+						return A2(
+							$elm$html$Html$div,
+							_List_Nil,
+							A2(
+								$elm$core$List$append,
+								_List_fromArray(
+									[
+										$elm$html$Html$text('Nearby postcodes:')
+									]),
+								A2($elm$core$List$map, $author$project$Main$postcodeNearbyView, response)));
+				}
+			}()
 			]));
 };
-var $author$project$Main$main = $elm$browser$Browser$sandbox(
-	{init: $author$project$Main$initialModel, update: $author$project$Main$update, view: $author$project$Main$view});
+var $author$project$Main$main = $elm$browser$Browser$element(
+	{init: $author$project$Main$initialModel, subscriptions: $author$project$Main$subscriptions, update: $author$project$Main$update, view: $author$project$Main$view});
 _Platform_export({'Main':{'init':$author$project$Main$main(
 	$elm$json$Json$Decode$succeed(_Utils_Tuple0))(0)}});}(this));

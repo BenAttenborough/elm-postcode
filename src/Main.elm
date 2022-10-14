@@ -17,23 +17,23 @@ postcodeApiUrl =
 
 type alias Model =
     { postCode : String
-    , data : RemoteData.WebData PostcodeDetails
+    , postCodeInfo : RemoteData.WebData PostcodeDetails
+    , postCodeNearby : RemoteData.WebData (List PostcodeDetails)
     }
 
+
 type alias PostcodeDetails =
-    { country : String
+    { postcode : String
+    , country : String
     , region : String
     }
 
 
--- type alias Response =
---     { result : PostcodeDetails
---     }
-
 initialModel : () -> ( Model, Cmd Msg )
 initialModel _ =
     ( { postCode = ""
-      , data = RemoteData.NotAsked
+      , postCodeInfo = RemoteData.NotAsked
+      , postCodeNearby = RemoteData.NotAsked
       }
     , Cmd.none
     )
@@ -47,14 +47,19 @@ subscriptions _ =
 postcodeDecoder : Decoder PostcodeDetails
 postcodeDecoder =
     Decode.succeed PostcodeDetails
-        |> requiredAt ["result", "country"] string
-        |> requiredAt ["result", "region"] string
+        |> required "postcode" string
+        |> required "country" string
+        |> required "region" string
 
 
--- responseDecoder : Decoder Response
--- responseDecoder =
---     Decode.succeed Response
---         |> required "result" postcodeDecoder
+postcodeResultDecoder : Decoder PostcodeDetails
+postcodeResultDecoder =
+    Decode.field "result" postcodeDecoder
+
+
+postcodeNearbyDecoder : Decoder (List PostcodeDetails)
+postcodeNearbyDecoder =
+    Decode.field "result" (Decode.list postcodeDecoder)
 
 
 type Msg
@@ -62,9 +67,7 @@ type Msg
     | OnKeyDown Int
     | Submit String
     | GotPostcode (RemoteData.WebData PostcodeDetails)
-
-
-
+    | GotPostcodeNearby (RemoteData.WebData (List PostcodeDetails))
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -74,17 +77,35 @@ update msg model =
             ( { model | postCode = code }, Cmd.none )
 
         Submit code ->
-            ( { model | data = RemoteData.Loading }, getPostcode code )
+            ( { model
+                | postCodeInfo = RemoteData.Loading
+                , postCodeNearby = RemoteData.Loading
+              }
+            , Cmd.batch
+                [ getPostcodeInfo code
+                , getPostcodeNearby code
+                ]
+            )
 
         OnKeyDown key ->
             if key == 13 then
-                ( { model | data = RemoteData.Loading }, getPostcode model.postCode )
+                ( { model | postCodeInfo = RemoteData.Loading }
+                , Cmd.batch
+                    [ getPostcodeInfo model.postCode
+                    , getPostcodeNearby model.postCode
+                    ]
+                )
 
             else
                 ( model, Cmd.none )
 
         GotPostcode response ->
-            ( { model | data = response }
+            ( { model | postCodeInfo = response }
+            , Cmd.none
+            )
+
+        GotPostcodeNearby response ->
+            ( { model | postCodeNearby = response }
             , Cmd.none
             )
 
@@ -95,27 +116,67 @@ onKeyDown tagger =
 
 
 view : Model -> Html Msg
-view { postCode, data } =
+view { postCode, postCodeInfo, postCodeNearby } =
     div []
         [ input [ placeholder "Postcode", value postCode, onInput OnChange, onKeyDown OnKeyDown ] []
         , button [ onClick (Submit postCode) ] [ text "Submit" ]
         , div []
             []
-        , case data of
+        , case postCodeInfo of
             RemoteData.NotAsked ->
                 text "Waiting for input"
 
             RemoteData.Loading ->
-                text "Loading"
+                text "Loading postcode info"
 
             RemoteData.Failure err ->
                 text ("Error: " ++ errorToString err)
 
             RemoteData.Success response ->
+                postcodeDetailsView response
+        , case postCodeNearby of
+            RemoteData.NotAsked ->
                 div []
-                    [ text response.country
-                    , text response.region
-                    ]
+                    [ text "Waiting for input" ]
+
+            RemoteData.Loading ->
+                div []
+                    [ text "Loading nearby postcodes" ]
+
+            RemoteData.Failure err ->
+                div []
+                    [ text ("Error: " ++ errorToString err) ]
+
+            RemoteData.Success response ->
+                div []
+                    (List.map
+                        postcodeNearbyView
+                        response
+                        |> List.append
+                            [ text "Nearby postcodes:" ]
+                    )
+        ]
+
+
+postcodeDetailsView : PostcodeDetails -> Html Msg
+postcodeDetailsView details =
+    div []
+        [ div []
+            [ text ("Country: " ++ details.country) ]
+        , div []
+            [ text ("Region: " ++ details.region) ]
+        ]
+
+
+postcodeNearbyView : PostcodeDetails -> Html Msg
+postcodeNearbyView details =
+    div []
+        [ div []
+            [ text ("Postcode: " ++ details.postcode) ]
+        , div []
+            [ text ("Country: " ++ details.country) ]
+        , div []
+            [ text ("Region: " ++ details.region) ]
         ]
 
 
@@ -129,11 +190,19 @@ main =
         }
 
 
-getPostcode : String -> Cmd Msg
-getPostcode code =
+getPostcodeInfo : String -> Cmd Msg
+getPostcodeInfo code =
     Http.get
         { url = postcodeApiUrl ++ code
-        , expect = Http.expectJson (RemoteData.fromResult >> GotPostcode) postcodeDecoder
+        , expect = Http.expectJson (RemoteData.fromResult >> GotPostcode) postcodeResultDecoder
+        }
+
+
+getPostcodeNearby : String -> Cmd Msg
+getPostcodeNearby code =
+    Http.get
+        { url = postcodeApiUrl ++ code ++ "/nearest"
+        , expect = Http.expectJson (RemoteData.fromResult >> GotPostcodeNearby) postcodeNearbyDecoder
         }
 
 
