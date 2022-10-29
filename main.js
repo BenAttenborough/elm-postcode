@@ -494,7 +494,7 @@ ${variant}`;
   var VERSION = "1.0.2";
   var TARGET_NAME = "My target name";
   var INITIAL_ELM_COMPILED_TIMESTAMP = Number(
-    "1665739391719"
+    "1665760483619"
   );
   var ORIGINAL_COMPILATION_MODE = "standard";
   var WEBSOCKET_PORT = "35829";
@@ -8359,6 +8359,15 @@ var $elm$core$List$append = F2(
 		}
 	});
 var $elm$html$Html$button = _VirtualDom_node('button');
+var $elm$json$Json$Encode$string = _Json_wrap;
+var $elm$html$Html$Attributes$stringProperty = F2(
+	function (key, string) {
+		return A2(
+			_VirtualDom_property,
+			key,
+			$elm$json$Json$Encode$string(string));
+	});
+var $elm$html$Html$Attributes$class = $elm$html$Html$Attributes$stringProperty('className');
 var $elm$html$Html$div = _VirtualDom_node('div');
 var $author$project$Main$errorToString = function (error) {
 	switch (error.$) {
@@ -8440,14 +8449,6 @@ var $author$project$Main$onKeyDown = function (tagger) {
 		'keydown',
 		A2($elm$json$Json$Decode$map, tagger, $elm$html$Html$Events$keyCode));
 };
-var $elm$json$Json$Encode$string = _Json_wrap;
-var $elm$html$Html$Attributes$stringProperty = F2(
-	function (key, string) {
-		return A2(
-			_VirtualDom_property,
-			key,
-			$elm$json$Json$Encode$string(string));
-	});
 var $elm$html$Html$Attributes$placeholder = $elm$html$Html$Attributes$stringProperty('placeholder');
 var $elm$virtual_dom$VirtualDom$text = _VirtualDom_text;
 var $elm$html$Html$text = $elm$virtual_dom$VirtualDom$text;
@@ -8509,88 +8510,154 @@ var $author$project$Main$view = function (_v0) {
 	var postCodeNearby = _v0.postCodeNearby;
 	return A2(
 		$elm$html$Html$div,
-		_List_Nil,
+		_List_fromArray(
+			[
+				$elm$html$Html$Attributes$class('main')
+			]),
 		_List_fromArray(
 			[
 				A2(
-				$elm$html$Html$input,
+				$elm$html$Html$div,
 				_List_fromArray(
 					[
-						$elm$html$Html$Attributes$placeholder('Postcode'),
-						$elm$html$Html$Attributes$value(postCode),
-						$elm$html$Html$Events$onInput($author$project$Main$OnChange),
-						$author$project$Main$onKeyDown($author$project$Main$OnKeyDown)
-					]),
-				_List_Nil),
-				A2(
-				$elm$html$Html$button,
-				_List_fromArray(
-					[
-						$elm$html$Html$Events$onClick(
-						$author$project$Main$Submit(postCode))
+						$elm$html$Html$Attributes$class('title')
 					]),
 				_List_fromArray(
 					[
-						$elm$html$Html$text('Submit')
+						$elm$html$Html$text('Postcode finder')
 					])),
-				A2($elm$html$Html$div, _List_Nil, _List_Nil),
-				function () {
-				switch (postCodeInfo.$) {
-					case 'NotAsked':
-						return $elm$html$Html$text('Waiting for input');
-					case 'Loading':
-						return $elm$html$Html$text('Loading postcode info');
-					case 'Failure':
-						var err = postCodeInfo.a;
-						return $elm$html$Html$text(
-							'Error: ' + $author$project$Main$errorToString(err));
-					default:
-						var response = postCodeInfo.a;
-						return $author$project$Main$postcodeDetailsView(response);
-				}
-			}(),
-				function () {
-				switch (postCodeNearby.$) {
-					case 'NotAsked':
-						return A2(
-							$elm$html$Html$div,
-							_List_Nil,
-							_List_fromArray(
-								[
-									$elm$html$Html$text('Waiting for input')
-								]));
-					case 'Loading':
-						return A2(
-							$elm$html$Html$div,
-							_List_Nil,
-							_List_fromArray(
-								[
-									$elm$html$Html$text('Loading nearby postcodes')
-								]));
-					case 'Failure':
-						var err = postCodeNearby.a;
-						return A2(
-							$elm$html$Html$div,
-							_List_Nil,
-							_List_fromArray(
-								[
-									$elm$html$Html$text(
-									'Error: ' + $author$project$Main$errorToString(err))
-								]));
-					default:
-						var response = postCodeNearby.a;
-						return A2(
-							$elm$html$Html$div,
-							_List_Nil,
-							A2(
-								$elm$core$List$append,
-								_List_fromArray(
-									[
-										$elm$html$Html$text('Nearby postcodes:')
-									]),
-								A2($elm$core$List$map, $author$project$Main$postcodeNearbyView, response)));
-				}
-			}()
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('input-controls')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$input,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$placeholder('Postcode'),
+								$elm$html$Html$Attributes$value(postCode),
+								$elm$html$Html$Events$onInput($author$project$Main$OnChange),
+								$author$project$Main$onKeyDown($author$project$Main$OnKeyDown)
+							]),
+						_List_Nil),
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick(
+								$author$project$Main$Submit(postCode))
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('Submit')
+							]))
+					])),
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('postcode-results')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$div,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('postcode-info')
+							]),
+						_List_fromArray(
+							[
+								function () {
+								switch (postCodeInfo.$) {
+									case 'NotAsked':
+										return A2(
+											$elm$html$Html$div,
+											_List_Nil,
+											_List_fromArray(
+												[
+													$elm$html$Html$text('Waiting on input')
+												]));
+									case 'Loading':
+										return A2(
+											$elm$html$Html$div,
+											_List_Nil,
+											_List_fromArray(
+												[
+													$elm$html$Html$text('Loading postcode info')
+												]));
+									case 'Failure':
+										var err = postCodeInfo.a;
+										return A2(
+											$elm$html$Html$div,
+											_List_Nil,
+											_List_fromArray(
+												[
+													$elm$html$Html$text(
+													'Error: ' + $author$project$Main$errorToString(err))
+												]));
+									default:
+										var response = postCodeInfo.a;
+										return A2(
+											$elm$html$Html$div,
+											_List_Nil,
+											_List_fromArray(
+												[
+													$author$project$Main$postcodeDetailsView(response)
+												]));
+								}
+							}()
+							])),
+						A2(
+						$elm$html$Html$div,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('postcode-nearby')
+							]),
+						_List_fromArray(
+							[
+								function () {
+								switch (postCodeNearby.$) {
+									case 'NotAsked':
+										return A2($elm$html$Html$div, _List_Nil, _List_Nil);
+									case 'Loading':
+										return A2(
+											$elm$html$Html$div,
+											_List_Nil,
+											_List_fromArray(
+												[
+													$elm$html$Html$text('Loading nearby postcodes')
+												]));
+									case 'Failure':
+										var err = postCodeNearby.a;
+										return A2(
+											$elm$html$Html$div,
+											_List_Nil,
+											_List_fromArray(
+												[
+													$elm$html$Html$text(
+													'Error: ' + $author$project$Main$errorToString(err))
+												]));
+									default:
+										var response = postCodeNearby.a;
+										return A2(
+											$elm$html$Html$div,
+											_List_Nil,
+											A2(
+												$elm$core$List$append,
+												_List_fromArray(
+													[
+														$elm$html$Html$text('Nearby postcodes:')
+													]),
+												A2($elm$core$List$map, $author$project$Main$postcodeNearbyView, response)));
+								}
+							}()
+							]))
+					]))
 			]));
 };
 var $author$project$Main$main = $elm$browser$Browser$element(

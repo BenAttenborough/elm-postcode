@@ -1,0 +1,32 @@
+body {
+    background-color: rgb(0, 153, 255);
+}
+
+.main {
+    display: grid;
+    justify-items: center;
+    /* border: solid red 1px; */
+    padding-top: 50px;
+}
+
+.title {
+    color: aliceblue;
+    font-size: 5rem;
+    margin-bottom: 2rem;
+}
+
+.input-controls {
+    /* border: solid yellow 1px; */
+}
+
+.postcode-results {
+    display: grid;
+    grid-template-columns: auto auto;
+    /* border: solid black 1px; */
+}
+
+.postcode-info,
+.postcode-nearby {
+    padding: 1rem;
+    color: aliceblue;
+}

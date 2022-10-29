@@ -2,11 +2,11 @@ module Main exposing (main)
 
 import Browser
 import Html exposing (Html, button, div, input, text)
-import Html.Attributes exposing (placeholder, value)
+import Html.Attributes exposing (class, placeholder, value)
 import Html.Events exposing (keyCode, on, onClick, onInput)
 import Http
 import Json.Decode as Decode exposing (Decoder, string)
-import Json.Decode.Pipeline exposing (required, requiredAt)
+import Json.Decode.Pipeline exposing (required)
 import RemoteData
 
 
@@ -117,44 +117,56 @@ onKeyDown tagger =
 
 view : Model -> Html Msg
 view { postCode, postCodeInfo, postCodeNearby } =
-    div []
-        [ input [ placeholder "Postcode", value postCode, onInput OnChange, onKeyDown OnKeyDown ] []
-        , button [ onClick (Submit postCode) ] [ text "Submit" ]
-        , div []
-            []
-        , case postCodeInfo of
-            RemoteData.NotAsked ->
-                text "Waiting for input"
+    div [ class "main" ]
+        [ div [ class "title" ]
+            [ text "Postcode finder" ]
+        , div [ class "input-controls" ]
+            [ input [ placeholder "Postcode", value postCode, onInput OnChange, onKeyDown OnKeyDown ] []
+            , button [ onClick (Submit postCode) ] [ text "Submit" ]
+            ]
+        , div [ class "postcode-results" ]
+            [ div [ class "postcode-info" ]
+                [ case postCodeInfo of
+                    RemoteData.NotAsked ->
+                        div []
+                            [ text "Waiting on input" ]
 
-            RemoteData.Loading ->
-                text "Loading postcode info"
+                    RemoteData.Loading ->
+                        div []
+                            [ text "Loading postcode info" ]
 
-            RemoteData.Failure err ->
-                text ("Error: " ++ errorToString err)
+                    RemoteData.Failure err ->
+                        div []
+                            [ text ("Error: " ++ errorToString err) ]
 
-            RemoteData.Success response ->
-                postcodeDetailsView response
-        , case postCodeNearby of
-            RemoteData.NotAsked ->
-                div []
-                    [ text "Waiting for input" ]
+                    RemoteData.Success response ->
+                        div []
+                            [ postcodeDetailsView response ]
+                ]
+            , div [ class "postcode-nearby" ]
+                [ case postCodeNearby of
+                    RemoteData.NotAsked ->
+                        div []
+                            []
 
-            RemoteData.Loading ->
-                div []
-                    [ text "Loading nearby postcodes" ]
+                    RemoteData.Loading ->
+                        div []
+                            [ text "Loading nearby postcodes" ]
 
-            RemoteData.Failure err ->
-                div []
-                    [ text ("Error: " ++ errorToString err) ]
+                    RemoteData.Failure err ->
+                        div []
+                            [ text ("Error: " ++ errorToString err) ]
 
-            RemoteData.Success response ->
-                div []
-                    (List.map
-                        postcodeNearbyView
-                        response
-                        |> List.append
-                            [ text "Nearby postcodes:" ]
-                    )
+                    RemoteData.Success response ->
+                        div []
+                            (List.map
+                                postcodeNearbyView
+                                response
+                                |> List.append
+                                    [ text "Nearby postcodes:" ]
+                            )
+                ]
+            ]
         ]
 
 
