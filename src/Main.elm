@@ -1,13 +1,18 @@
 module Main exposing (main)
 
-import Browser
-import Html exposing (Html, button, div, input, text)
+-- import Browser.Navigation as Nav
+
+import Browser exposing (Document, UrlRequest)
+import Browser.Navigation
+import Html exposing (Html, a, button, div, input, text)
 import Html.Attributes exposing (class, placeholder, value)
 import Html.Events exposing (keyCode, on, onClick, onInput)
 import Http
 import Json.Decode as Decode exposing (Decoder, string)
 import Json.Decode.Pipeline exposing (required)
 import RemoteData
+import Url exposing (Url)
+import Url.Parser exposing (Parser)
 
 
 postcodeApiUrl : String
@@ -19,6 +24,7 @@ type alias Model =
     { postCode : String
     , postCodeInfo : RemoteData.WebData PostcodeDetails
     , postCodeNearby : RemoteData.WebData (List PostcodeDetails)
+    , navKey : Browser.Navigation.Key
     }
 
 
@@ -29,11 +35,12 @@ type alias PostcodeDetails =
     }
 
 
-initialModel : () -> ( Model, Cmd Msg )
-initialModel _ =
+initialModel : () -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
+initialModel flags url navKey =
     ( { postCode = ""
       , postCodeInfo = RemoteData.NotAsked
       , postCodeNearby = RemoteData.NotAsked
+      , navKey = navKey
       }
     , Cmd.none
     )
@@ -62,12 +69,19 @@ postcodeNearbyDecoder =
     Decode.field "result" (Decode.list postcodeDecoder)
 
 
+routeParser : Parser (String -> a) a
+routeParser =
+    Url.Parser.string
+
+
 type Msg
     = OnChange String
     | OnKeyDown Int
     | Submit String
     | GotPostcode (RemoteData.WebData PostcodeDetails)
     | GotPostcodeNearby (RemoteData.WebData (List PostcodeDetails))
+    | LinkClicked UrlRequest
+    | UrlChanged Url
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -109,14 +123,27 @@ update msg model =
             , Cmd.none
             )
 
+        LinkClicked response ->
+            ( model, Cmd.none )
+
+        UrlChanged response ->
+            ( model, Cmd.none )
+
 
 onKeyDown : (Int -> msg) -> Html.Attribute msg
 onKeyDown tagger =
     on "keydown" (Decode.map tagger keyCode)
 
 
-view : Model -> Html Msg
-view { postCode, postCodeInfo, postCodeNearby } =
+view : Model -> Document Msg
+view model =
+    { title = "Postcode finder"
+    , body = [ currentView model ]
+    }
+
+
+currentView : Model -> Html Msg
+currentView { postCode, postCodeInfo, postCodeNearby } =
     div [ class "main" ]
         [ div [ class "title" ]
             [ text "Postcode finder" ]
@@ -194,11 +221,13 @@ postcodeNearbyView details =
 
 main : Program () Model Msg
 main =
-    Browser.element
+    Browser.application
         { init = initialModel
+        , onUrlRequest = LinkClicked
+        , onUrlChange = UrlChanged
         , subscriptions = subscriptions
-        , view = view
         , update = update
+        , view = view
         }
 
 

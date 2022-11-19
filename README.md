@@ -13,6 +13,8 @@ To compile run:
 I've installed [Elm watch](https://lydell.github.io/elm-watch/getting-started/)
 If you open `index.html` in a browser and run `npx elm-watch hot` it will refresh the page on save
 
+You will need at least node 14, so `nvm use` if there are errors
+
 ## Instructions
 
 Please write a web application in a javascript framework (AngularJS preferred, but any is fine) or Elm that
