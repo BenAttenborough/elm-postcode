@@ -10,10 +10,10 @@ To compile run:
 
 ## Hot reloading
 
-I've installed [Elm watch](https://lydell.github.io/elm-watch/getting-started/)
-If you open `index.html` in a browser and run `npx elm-watch hot` it will refresh the page on save
+I've installed [Elm live](https://github.com/wking-io/elm-live)
 
-You will need at least node 14, so `nvm use` if there are errors
+Run `npm start`
+Which is an alias for `npx elm-live src/Main.elm --open -- --output=main.js`
 
 ## Instructions
 

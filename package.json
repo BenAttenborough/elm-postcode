@@ -1,5 +1,9 @@
 {
-  "dependencies": {
-    "elm-watch": "^1.0.2"
-  }
+    "dependencies": {},
+    "devDependencies": {
+        "elm-live": "^4.0.2"
+    },
+    "scripts": {
+        "start": "npx elm-live src/Main.elm --open -- --output=main.js"
+    }
 }
