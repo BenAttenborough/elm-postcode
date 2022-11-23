@@ -4,6 +4,6 @@
         "elm-live": "^4.0.2"
     },
     "scripts": {
-        "start": "npx elm-live src/Main.elm --open -- --output=main.js"
+        "start": "npx elm-live src/Main.elm --pushstate --open -- --debug --output=main.js"
     }
 }

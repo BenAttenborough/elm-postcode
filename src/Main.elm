@@ -11,6 +11,7 @@ import Http
 import Json.Decode as Decode exposing (Decoder, string)
 import Json.Decode.Pipeline exposing (required)
 import RemoteData
+import Task
 import Url exposing (Url)
 import Url.Parser exposing (Parser)
 
@@ -25,6 +26,7 @@ type alias Model =
     , postCodeInfo : RemoteData.WebData PostcodeDetails
     , postCodeNearby : RemoteData.WebData (List PostcodeDetails)
     , navKey : Browser.Navigation.Key
+    , currentRoute : Url
     }
 
 
@@ -35,15 +37,42 @@ type alias PostcodeDetails =
     }
 
 
-initialModel : () -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
-initialModel flags url navKey =
-    ( { postCode = ""
-      , postCodeInfo = RemoteData.NotAsked
-      , postCodeNearby = RemoteData.NotAsked
-      , navKey = navKey
-      }
-    , Cmd.none
-    )
+init : () -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
+init flags url navKey =
+    let
+        _ =
+            Debug.log "url>" url.path
+
+        postcodeInUrl =
+            url.path
+                |> String.dropLeft 1
+                |> String.isEmpty
+                |> not
+                |> Debug.log "code in url"
+    in
+    if postcodeInUrl then
+        update
+            (Submit (String.dropLeft 1 url.path))
+            { postCode = String.dropLeft 1 url.path
+            , postCodeInfo = RemoteData.NotAsked
+            , postCodeNearby = RemoteData.NotAsked
+            , navKey = navKey
+            , currentRoute = url
+            }
+
+    else
+        ( { postCode = ""
+          , postCodeInfo = RemoteData.NotAsked
+          , postCodeNearby = RemoteData.NotAsked
+          , navKey = navKey
+          , currentRoute = url
+          }
+        , Cmd.none
+        )
+
+
+
+-- |> (\a -> ( a, Cmd.none ))
 
 
 subscriptions : Model -> Sub Msg
@@ -124,9 +153,17 @@ update msg model =
             )
 
         LinkClicked response ->
+            let
+                _ =
+                    Debug.log "x" "y"
+            in
             ( model, Cmd.none )
 
-        UrlChanged response ->
+        UrlChanged url ->
+            let
+                _ =
+                    Debug.log "url" url
+            in
             ( model, Cmd.none )
 
 
@@ -222,7 +259,7 @@ postcodeNearbyView details =
 main : Program () Model Msg
 main =
     Browser.application
-        { init = initialModel
+        { init = init
         , onUrlRequest = LinkClicked
         , onUrlChange = UrlChanged
         , subscriptions = subscriptions
