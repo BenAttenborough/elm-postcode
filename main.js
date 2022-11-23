@@ -11121,11 +11121,8 @@ var $author$project$Main$update = F2(
 	});
 var $author$project$Main$init = F3(
 	function (flags, url, navKey) {
-		var postcodeInUrl = A2(
-			$elm$core$Debug$log,
-			'code in url',
-			!$elm$core$String$isEmpty(
-				A2($elm$core$String$dropLeft, 1, url.path)));
+		var postcodeInUrl = !$elm$core$String$isEmpty(
+			A2($elm$core$String$dropLeft, 1, url.path));
 		var _v0 = A2($elm$core$Debug$log, 'url>', url.path);
 		return postcodeInUrl ? A2(
 			$author$project$Main$update,

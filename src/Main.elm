@@ -48,7 +48,6 @@ init flags url navKey =
                 |> String.dropLeft 1
                 |> String.isEmpty
                 |> not
-                |> Debug.log "code in url"
     in
     if postcodeInUrl then
         update
